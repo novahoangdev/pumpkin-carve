@@ -1,0 +1,263 @@
+{
+ "_doc": "Beat sheet v5s = v5 nhưng máy ĐỨNG YÊN (22:25, anh Hoa: không lia/zoom/rung): 1 key máy, 1 key camera thấy trọn máy, không punch/shake/tilt. Beat sheet v5 = v4 + mở đầu mới (POLISH 19:15): clip bắt đầu ở app 0.3, khung đầu đã đẩy sát vào màn (thấy trăng + tia sét), chớp + sấm ở 0.15 s clip, camera kéo ra thấy cả máy cùng lúc app cẩu máy từ trăng xuống (0.6–2.3), rồi vào bí như v4. Beat sheet v4 (khung 17 Pro Max 440×956) = v3 + giông (sét 9.95 / 22.35, sấm 11.99 / 25.56) + cận cảnh lúc nghiêng để thấy parallax 3D. Mốc = giây app (đo từ mô phỏng của synth_audio.py và kiểm lại trên frame bản quay); \"start\"/\"card+x\"/\"end\" như v2.json. Intro zoom 0.3–2.9, khắc 3.2/4.2/5.2/5.9 (lỗ bật 3.97/4.97/5.70/7.10), nhìn quanh 7.5–11.1 (phải tới cửa 8.4, trái+lên tới trăng 10.0, về giữa 11.1), chạm 11.4/12.05/12.7/13.15/13.35 → bí bay vào Dynamic Island 13.93, rung 15.53, nhả ra 16.05, rơi đáp 16.63, que diêm 18.3–19.72, tắt đèn 19.72, nến bùng 20.107, nghiêng 20.92–24.52, dơi 24.9–28.5. Khung nghỉ mới (REST: mắt hạ 8 cm, zoom 0.95): điểm quanh quả bí đã dời lên ~54 pt. Dơi app xếp chữ HAPPY HALLOWEEN 27,9–29,1, lướt qua ống kính 29,5–30,5 → app_end 30,9, dơi 3D của promo bay ra 29,55.",
+ "app_start": 0.36,
+ "app_end": 30.9,
+ "card": 3.6,
+ "burst": 20.107,
+ "blackout": 19.72,
+ "bats_at": 24.9,
+ "audio": "render/audio/mix_final.wav",
+ "sheet": [
+  5.4,
+  8.6,
+  14.6,
+  16.7,
+  20.6,
+  28.5
+ ],
+ "sections": [
+  [
+   "start",
+   "#141a33",
+   "#3b4a6b",
+   "#9fb2e0",
+   0.22,
+   0
+  ],
+  [
+   7.5,
+   "#0e1a2c",
+   "#2f5b7a",
+   "#9fd0ff",
+   0.26,
+   20
+  ],
+  [
+   13.35,
+   "#1d0b2b",
+   "#7a2f86",
+   "#ff9ae8",
+   0.32,
+   10
+  ],
+  [
+   16.63,
+   "#141a33",
+   "#3b4a6b",
+   "#9fb2e0",
+   0.22,
+   12
+  ],
+  [
+   19.72,
+   "#04050d",
+   "#0b0f1f",
+   "#1a2140",
+   0.05,
+   6
+  ],
+  [
+   20.107,
+   "#3a1405",
+   "#f07a1a",
+   "#ffd27a",
+   0.42,
+   0
+  ],
+  [
+   24.9,
+   "#170c2e",
+   "#5a3590",
+   "#b89cff",
+   0.26,
+   20
+  ]
+ ],
+ "words": [
+  [
+   "CARVE",
+   2.9,
+   7.5,
+   "#f07a1a",
+   0.42,
+   2.5
+  ],
+  [
+   "LOOK",
+   7.5,
+   11.1,
+   "#9fd0ff",
+   0.5,
+   2.6
+  ],
+  [
+   "TAP",
+   11.1,
+   13.35,
+   "#f07a1a",
+   0.45,
+   3.0
+  ],
+  [
+   "BOO!",
+   13.35,
+   16.63,
+   "#ff9ae8",
+   0.55,
+   2.9
+  ],
+  [
+   "LIGHT",
+   20.107,
+   24.9,
+   "#ffe2a6",
+   0.62,
+   2.5
+  ],
+  [
+   "BATS",
+   24.9,
+   "card",
+   "#b89cff",
+   0.5,
+   2.7
+  ]
+ ],
+ "phone": [
+  {
+   "t": "start",
+   "rot": [
+    0,
+    0,
+    0
+   ],
+   "loc": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "t": "card-0.02",
+   "rot": [
+    0,
+    0,
+    0
+   ],
+   "loc": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "t": "card",
+   "rot": [
+    0,
+    0,
+    -12
+   ],
+   "loc": [
+    1.0,
+    -2.32,
+    0
+   ]
+  },
+  {
+   "t": "end",
+   "rot": [
+    0,
+    0,
+    -12
+   ],
+   "loc": [
+    1.0,
+    -2.32,
+    0
+   ]
+  }
+ ],
+ "camera": [
+  {
+   "t": "start",
+   "at": {
+    "world": [
+     0,
+     0,
+     0
+    ]
+   },
+   "d": 5.0,
+   "orbit": [
+    0,
+    0
+   ]
+  },
+  {
+   "t": "card-0.02",
+   "at": {
+    "world": [
+     0,
+     0,
+     0
+    ]
+   },
+   "d": 5.0,
+   "orbit": [
+    0,
+    0
+   ]
+  },
+  {
+   "t": "card",
+   "at": {
+    "world": [
+     0,
+     0,
+     0
+    ]
+   },
+   "d": 8.6,
+   "orbit": [
+    0,
+    0
+   ]
+  },
+  {
+   "t": "end",
+   "at": {
+    "world": [
+     0,
+     0,
+     0
+    ]
+   },
+   "d": 8.6,
+   "orbit": [
+    0,
+    0
+   ]
+  }
+ ],
+ "punches": [],
+ "shakes": [],
+ "fstops": [
+  [
+   "start",
+   5.6
+  ]
+ ],
+ "bats": {
+  "t": 29.55,
+  "spread": 1.8,
+  "count": 22,
+  "src": [
+   197,
+   560
+  ]
+ },
+ "view": [
+  440,
+  956
+ ]
+}
