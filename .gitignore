@@ -1,0 +1,27 @@
+# render/: sinh ra khi quay / dựng (tools/*.sh dựng lại được), chỉ giữ video final + ảnh xem nhanh + tiếng
+render/*
+!render/concept.png
+!render/promo/
+render/promo/*
+!render/promo/pumpkin-carve-final-v2.mp4
+!render/promo/pumpkin-carve-final.mp4
+!render/promo/pumpkin-carve-sheet-final-v2.jpg
+!render/promo/pumpkin-carve-sheet-final.jpg
+!render/audio/
+render/audio/*
+!render/audio/mix_final.wav
+
+# blender
+*.blend1
+
+# app
+app/node_modules/
+app/ios/
+app/android/
+app/.expo/
+*.log
+
+# rác của máy
+.DS_Store
+versions/
+.env*
