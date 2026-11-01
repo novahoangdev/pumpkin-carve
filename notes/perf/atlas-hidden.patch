@@ -1,0 +1,63 @@
+--- a/app/src/fx/pfx_atlas.ts	2026-10-31 16:34:59
++++ b/app/src/fx/pfx_atlas.ts	2026-10-31 16:47:00
+@@ -14,6 +14,12 @@
+  * không chạy lại buffer, không vẽ lại gì thêm.
+  */
+ export const STRIDE = 12;
++/**
++ * Sprite "tắt": scale nhỏ nhưng KHẢ NGHỊCH, đặt ngoài màn hình. KHÔNG dùng RSXform (0, 0, 0, 0): Graphite in
++ * "[skia] WARNING - Skipping draw with non-invertible/non-finite transform" ra stderr cho TỪNG sprite như vậy mỗi frame
++ * (bản Release: ~32 000 dòng/giây, chiếm ~1/3 thời gian của mỗi luồng render → khựng).
++ */
++export const HIDDEN_XF = [1e-3, 0, -1e4, -1e4] as const;
+ export const NONE: number[] = [];
+ 
+ /** Lấy mẫu có mipmap: sprite thường được thu nhỏ 2–4 lần trên màn hình. */
+@@ -41,6 +47,11 @@
+   a: number,
+ ) => {
+   "worklet";
++  if (!(Math.abs(s) >= 1e-3)) {
++    // scale 0 / NaN → ma trận không khả nghịch (xem HIDDEN_XF): đẩy sprite ẩn thay vì sprite suy biến
++    out.push(HIDDEN_XF[0], HIDDEN_XF[1], HIDDEN_XF[2], HIDDEN_XF[3], rx, ry, rw, rh, r, g, b, 0);
++    return;
++  }
+   const sc = s * Math.cos(rot);
+   const ss = s * Math.sin(rot);
+   out.push(sc, ss, cx - (sc * ax - ss * ay), cy - (ss * ax + sc * ay), rx, ry, rw, rh, r, g, b, a < 0 ? 0 : a > 1 ? 1 : a);
+@@ -70,7 +81,7 @@
+     const d = data.value;
+     const o = i * STRIDE;
+     if (o < d.length) v.set(d[o], d[o + 1], d[o + 2], d[o + 3]);
+-    else v.set(0, 0, 0, 0);
++    else v.set(HIDDEN_XF[0], HIDDEN_XF[1], HIDDEN_XF[2], HIDDEN_XF[3]);
+   });
+   const sprites = useRectBuffer(max, (v, i) => {
+     "worklet";
+--- a/app/src/fx/Gust.tsx	2026-10-31 16:34:59
++++ b/app/src/fx/Gust.tsx	2026-10-31 16:47:00
+@@ -182,7 +182,7 @@
+     const k = Math.floor(i / FG_COPIES), c = i % FG_COPIES;
+     fgLeaf(k, u - (c / FG_COPIES) / 60, basis ? basis.value : BASE_BASIS, P1, O1, vw, vh);
+     if (O1[6] <= 0) {
+-      v.set(0, 0, 0, 0);
++      v.set(1e-3, 0, -1e4, -1e4); // ẩn: scale 0 làm Skia log mỗi frame (notes/perf.md)
+       return;
+     }
+     const sc = O1[2] * Math.cos(O1[3]), ss = O1[2] * Math.sin(O1[3]);
+@@ -217,13 +217,13 @@
+   const scX = useRSXformBuffer(nSc, (v, i) => {
+     "worklet";
+     if (off < 0) {
+-      v.set(0, 0, 0, 0);
++      v.set(1e-3, 0, -1e4, -1e4); // ẩn: scale 0 làm Skia log mỗi frame (notes/perf.md)
+       return;
+     }
+     const u = at < 0 ? -1 : time.value - at;
+     scLeaf(i, u, basis ? basis.value : BASE_BASIS, P4, O4, vw, vh);
+     if (O4[6] <= 0) {
+-      v.set(0, 0, 0, 0);
++      v.set(1e-3, 0, -1e4, -1e4); // ẩn: scale 0 làm Skia log mỗi frame (notes/perf.md)
+       return;
+     }
+     const ax = 32, ay = O4[7] ? 16 : 32;

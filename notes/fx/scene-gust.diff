@@ -1,0 +1,28 @@
+--- app/src/scene/PumpkinScene.tsx	2026-10-31 16:31:22
++++ app/src/scene/PumpkinScene.tsx	2026-10-31 16:35:18
+@@ -61,6 +61,7 @@
+ import { PoppedPiece } from "../carve/PoppedPiece";
+ import { Match, MATCH_REST } from "../fx/Match";
+ import { Bats } from "../fx/Bats";
++import { Gust } from "../fx/Gust";
+ import { Particles, type Burst } from "../fx/Particles";
+ import { usePumpkinJump } from "../fx/jump";
+ import { IslandPill, JumpTrail } from "../fx/IslandPill";
+@@ -854,7 +855,8 @@
+                   <Path path={trail} style="stroke" strokeWidth={0.6} strokeCap="round" strokeJoin="round" color="#fff4dc" opacity={0.55} />
+                 </Group>
+               </Group>
+-              <Particles bursts={bursts} time={time} litAt={litAt} basis={basis} />
++              <Particles bursts={bursts} time={time} litAt={litAt} basis={basis} impacts={jump.impacts} />
++              <Gust layer="scene" time={time} basis={basis} />
+               <Fill blendMode="plus">
+                 <Shader source={rain} uniforms={rainU}>
+                   <ImageShader image={depthB} tx="clamp" ty="clamp" />
+@@ -888,6 +890,7 @@
+       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+         {ready && (
+           <Group transform={fitTransform}>
++              <Gust layer="fg" time={time} basis={basis} />
+               <Bats t0={batsAt} time={time} basis={basis} />
+               <Fill color="black" opacity={blackout} />
+               {/* ngón tay ảo (chỉ demo) */}

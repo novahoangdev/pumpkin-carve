@@ -1,0 +1,35 @@
+--- app/src/scene/PumpkinScene.tsx	2026-10-31 16:05:39
++++ app/src/scene/PumpkinScene.tsx	2026-10-31 16:06:39
+@@ -786,7 +786,7 @@
+                   <ImageShader image={carve.images.blur} tx="decal" ty="decal" />
+                 </Shader>
+               </Fill>
+-              <ImpactDust impacts={jump.impacts} time={time} />
++              <ImpactDust impacts={jump.impacts} time={time} basis={basis} />
+               <Group transform={pumpkinTransform}>
+                 {pieces.map((p) => (
+                   <PoppedPiece
+@@ -798,7 +798,6 @@
+                     onDone={() => setPieces((ps) => ps.filter((q) => q.id !== p.id))}
+                   />
+                 ))}
+-                <Particles bursts={bursts} time={time} litAt={litAt} />
+                 {/* vệt dao: khe cắt hở lộ thịt bí sáng màu, mép dưới đổ bóng tối, mép trên bắt sáng, nước bí ướt */}
+                 <Group transform={[{ translateX: 0.7 }, { translateY: 1.1 }]}>
+                   <Path path={trail} style="stroke" strokeWidth={3.2} strokeCap="round" strokeJoin="round" color="#3a1404" opacity={0.75}>
+@@ -811,13 +810,14 @@
+                   <Path path={trail} style="stroke" strokeWidth={0.6} strokeCap="round" strokeJoin="round" color="#fff4dc" opacity={0.55} />
+                 </Group>
+               </Group>
++              <Particles bursts={bursts} time={time} litAt={litAt} basis={basis} />
+               <Fill blendMode="plus">
+                 <Shader source={rain} uniforms={rainU}>
+                   <ImageShader image={depthB} tx="clamp" ty="clamp" />
+                   <ImageShader image={depthP} tx="clamp" ty="clamp" />
+                 </Shader>
+               </Fill>
+-              <Match x={mx} y={my} burn={burn} fade={matchFade} time={time} />
++              <Match x={mx} y={my} burn={burn} fade={matchFade} time={time} basis={basis} />
+             </Group>
+           )}
+         </Canvas>
