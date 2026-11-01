@@ -1,24 +1,24 @@
-# Render các lớp 2.5D cho app từ cùng một góc máy, rồi xuất app/assets/scene/*:
-#   bg_lit.jpg, bg_dark.jpg     cảnh không có bí (bí KHÔNG đổ bóng, để bí nhảy được): đèn hiên bật / chỉ còn trăng
-#   bg_glow.jpg                 riêng phần ánh sáng của ngọn nến lên thềm và tường: một nguồn điểm 3 W ở tâm lòng bí
-#                               (layout "glowSrc"), vỏ/lòng bí ẩn → chỉ suy giảm hình học + bóng vật khác; view
-#                               "Standard", exposure 0 (giá trị sRGB của bức xạ tuyến tính); app nhân với tầm nhìn qua lỗ khắc
-#   bg_depth.png, bg_depth_pano.png   độ sâu cho parallax: PNG xám 8-bit, cùng cỡ với bg_lit.jpg / bg_lit_pano.jpg, khớp
-#                               từng pixel. Giá trị = khoảng cách THEO TIA (m) từ vị trí camera tới mặt đầu tiên:
-#                               v = 255·clamp(ln(d/0.25)/ln(200/0.25), 0, 1), trời = 255 (layout "depth": min, max).
-#                               Hình học thấy được y như bg_lit/bg_dark (bí ẩn). 1 sample, filter ≈ 0 → không trộn độ sâu ở mép
-#   shadow_lit.png, shadow_dark.png   bóng của quả bí tách riêng: hệ số nhân 1 kênh (8-bit xám, 1 = không bóng),
-#                               = (nền có bóng bí) / (nền không bóng bí), khung gốc 1320×2868, không crop
-#   bg_lit_pano.jpg, bg_dark_pano.jpg, bg_glow_pano.jpg   nền toàn cảnh để app "nhìn quanh": equirect từ CAM_LOC,
-#                               hệ level (fwd = hướng ngang của camera gốc, up = z), lon ∈ [-80, 80] (dương = phải),
-#                               lat ∈ [-62, 58] (dương = lên); u = (lon+80)/160·W, v = (58−lat)/120·H; 3200×2400 @100 %
-#   skin_lit.png, skin_dark.png vỏ ngoài + cuống (RGBA, khung vuông quanh quả bí)
-#   interior_lit/unlit.png      lòng bí khi nửa trước ẩn khỏi camera: nến sáng / nến tắt
-#   data.png                    R,G: normal theo không gian camera (0..1), B: vùng khắc được
-#   flesh.jpg                   thớ thịt bí cho thành vết cắt
-#   layout.json                 khung crop, toạ độ nến/miệng/đèn hiên, thông số camera (đơn vị pt màn hình 440×956, iPhone 17 Pro Max)
+# Render the 2.5D layers for the app from a single camera angle, then export app/assets/scene/*:
+#   bg_lit.jpg, bg_dark.jpg     scene without the pumpkin (pumpkin casts NO shadow, so it can jump): porch light on / moon only
+#   bg_glow.jpg                 only the candle's light on the porch and wall: a 3 W point source at the pumpkin interior centre
+#                               (layout "glowSrc"), skin/interior hidden → only geometric falloff + shadows of other objects; view
+#                               "Standard", exposure 0 (sRGB values of linear radiance); the app multiplies by visibility through the carved holes
+#   bg_depth.png, bg_depth_pano.png   depth for parallax: 8-bit grey PNG, same size as bg_lit.jpg / bg_lit_pano.jpg, pixel-
+#                               aligned. Value = distance ALONG THE RAY (m) from the camera position to the first surface:
+#                               v = 255·clamp(ln(d/0.25)/ln(200/0.25), 0, 1), sky = 255 (layout "depth": min, max).
+#                               Visible geometry exactly as in bg_lit/bg_dark (pumpkin hidden). 1 sample, filter ≈ 0 → no depth blending at edges
+#   shadow_lit.png, shadow_dark.png   the pumpkin's shadow on its own: 1-channel multiplier (8-bit grey, 1 = no shadow),
+#                               = (background with pumpkin shadow) / (background without it), original 1320×2868 frame, no crop
+#   bg_lit_pano.jpg, bg_dark_pano.jpg, bg_glow_pano.jpg   panorama backgrounds for the app's "look around": equirect from CAM_LOC,
+#                               level frame (fwd = horizontal direction of the original camera, up = z), lon ∈ [-80, 80] (positive = right),
+#                               lat ∈ [-62, 58] (positive = up); u = (lon+80)/160·W, v = (58−lat)/120·H; 3200×2400 @100 %
+#   skin_lit.png, skin_dark.png outer skin + stem (RGBA, square crop around the pumpkin)
+#   interior_lit/unlit.png      pumpkin interior with the front half hidden from the camera: candle lit / candle out
+#   data.png                    R,G: camera-space normal (0..1), B: carvable area
+#   flesh.jpg                   pumpkin flesh grain for the cut walls
+#   layout.json                 crop box, candle/mouth/porch-light coordinates, camera parameters (in screen pt 440×956, iPhone 17 Pro Max)
 #
-# Chạy: Blender -b blender/pumpkin.blend -P blender/scripts/render_passes.py -- [--pct 100] [--samples 128] [--only bg_lit,...]
+# Run: Blender -b blender/pumpkin.blend -P blender/scripts/render_passes.py -- [--pct 100] [--samples 128] [--only bg_lit,...]
 import bpy, json, math, os, sys
 import numpy as np
 from mathutils import Vector
@@ -40,21 +40,21 @@ r = sc.render
 r.resolution_percentage = PCT
 W, H = r.resolution_x, r.resolution_y            # 1320×2868 = 440×956 pt @3x (iPhone 17 Pro Max)
 VIEW_PT = (440, 956)
-PT = W / VIEW_PT[0]                                   # px (100 %) trên mỗi pt
+PT = W / VIEW_PT[0]                                   # px (100 %) per pt
 cam = sc.camera
 O = bpy.data.objects
 L = {n: O[n] for n in ("moon", "moon_fill", "porch", "porch_key", "candle", "candle_glow")}
 SKIN = [O["skin_front"], O["skin_back"], O["stem"]]
 INNER = [o for o in bpy.data.collections["inner"].objects]
 ENV = [o for o in bpy.data.collections["env"].objects]
-CAM_ONLY = {o for o in ENV if o.get("pc_cam_only")}      # trần, mái…: chỉ camera thấy, không bao giờ đổ bóng
+CAM_ONLY = {o for o in ENV if o.get("pc_cam_only")}      # ceiling, roof…: camera-visible only, never cast shadows
 glass = bpy.data.materials["lantern_glass"].node_tree.nodes["emit"]
 _skym = bpy.data.materials.get("sky")
-skyem = _skym.node_tree.nodes.get("emit") if _skym else None    # phông trời phẳng cũ (bản mở rộng đã bỏ, dùng world)
+skyem = _skym.node_tree.nodes.get("emit") if _skym else None    # old flat sky backdrop (dropped in the extended version, world is used instead)
 world_bg = next(n for n in sc.world.node_tree.nodes if n.type == "BACKGROUND" and n.name != "sky_bg")
-sky_bg = sc.world.node_tree.nodes.get("sky_bg")          # trời toàn cảnh (chỉ camera thấy), cùng cường độ với phông phẳng
-# đèn phụ của phần cảnh mở rộng (vd. ánh cửa sổ) và vật liệu tự phát sáng của cảnh (node "emit_env"):
-# bật khi có ánh sáng môi trường, tắt ở pass ánh nến / data
+sky_bg = sc.world.node_tree.nodes.get("sky_bg")          # panoramic sky (camera-visible only), same strength as the flat backdrop
+# extra lights of the extended scene (e.g. window glow) and the scene's self-emissive materials ("emit_env" node):
+# on when there is ambient light, off in the candlelight / data passes
 LIGHTS_X = [o for o in bpy.data.collections["lights"].objects if o.name not in L]
 ENV_EMIT = [(n, n.inputs["Strength"].default_value) for m in bpy.data.materials if m.use_nodes and m.node_tree
             for n in m.node_tree.nodes if n.name == "emit_env"]
@@ -62,12 +62,12 @@ VIEW0, EXPO0 = sc.view_settings.view_transform, sc.view_settings.exposure
 
 
 def to_px(p):
-    """Toạ độ thế giới → pixel 100 % (gốc trên trái)."""
+    """World coordinates → 100 % pixel (origin top left)."""
     v = world_to_camera_view(sc, cam, Vector(p))
     return v.x * W, (1 - v.y) * H
 
 
-# ── khung crop vuông quanh quả bí (pixel 100 %) ──
+# ── square crop around the pumpkin (100 % pixels) ──
 pts = []
 for ob in SKIN:
     m = ob.matrix_world
@@ -80,7 +80,7 @@ CY0 = int((min(ys) + max(ys)) / 2 - S / 2)
 
 def state(lights=(), lantern=0.0, world=0.35, sky=1.0, cam_vis=(), hidden=(), shadow_off=(), transparent=False,
           crop=False, view=None, band_y0=None):
-    """band_y0: chỉ render dải từ hàng px band_y0 (100 %) xuống đáy khung, ảnh vẫn đủ cỡ (ngoài dải = đen)."""
+    """band_y0: render only the band from px row band_y0 (100 %) down to the frame bottom; the image stays full size (outside the band = black)."""
     for n, ob in L.items():
         ob.hide_render = n not in lights
     for ob in LIGHTS_X:
@@ -116,7 +116,7 @@ DEPTH_MIN, DEPTH_MAX = 0.25, 200.0
 
 
 def render_depth(name):
-    """Z pass của trạng thái hiện tại: 1 sample, pixel filter ≈ 0 (mẫu ở tâm pixel) → EXR multilayer tạm."""
+    """Z pass of the current state: 1 sample, pixel filter ≈ 0 (sampled at pixel centres) → temporary multilayer EXR."""
     path = os.path.join(TMP, f"{name}.exr")
     if ONLY and name not in ONLY.split(","):
         return path
@@ -126,8 +126,8 @@ def render_depth(name):
     r.filter_size = 0.01
     sc.cycles.samples = 1
     sc.cycles.use_denoising = False
-    if hasattr(r.image_settings, "media_type"):          # Blender ≥ 5.0: multilayer là một media type của OPEN_EXR
-        r.image_settings.media_type = "MULTI_LAYER_IMAGE"      # → file_format tự thành OPEN_EXR_MULTILAYER
+    if hasattr(r.image_settings, "media_type"):          # Blender ≥ 5.0: multilayer is a media type of OPEN_EXR
+        r.image_settings.media_type = "MULTI_LAYER_IMAGE"      # → file_format becomes OPEN_EXR_MULTILAYER automatically
     else:
         r.image_settings.file_format = "OPEN_EXR_MULTILAYER"
     r.image_settings.color_depth = "32"
@@ -141,7 +141,7 @@ def render_depth(name):
 
 
 def read_z(path):
-    """Kênh Depth.Z của EXR multilayer (hàng 0 = trên cùng)."""
+    """Depth.Z channel of a multilayer EXR (row 0 = top)."""
     import OpenImageIO as oiio
     inp = oiio.ImageInput.open(path)
     try:
@@ -154,12 +154,12 @@ def read_z(path):
             si += 1
     finally:
         inp.close()
-    raise RuntimeError(f"không thấy Depth.Z trong {path}")
+    raise RuntimeError(f"Depth.Z not found in {path}")
 
 
 def save_depth(z, pano, out):
-    """Z pass → khoảng cách theo tia → PNG xám log. Phối cảnh: Z là phẳng (dọc trục nhìn) → d = z·|tia|/|tia·fwd|;
-    equirect của Cycles: Z đã là khoảng cách theo tia."""
+    """Z pass → distance along the ray → log grey PNG. Perspective: Z is planar (along the view axis) → d = z·|ray|/|ray·fwd|;
+    Cycles equirect: Z is already the distance along the ray."""
     h, w = z.shape
     sky = ~np.isfinite(z) | (z > 1e6)
     if pano:
@@ -202,7 +202,7 @@ FRONT = [O["skin_front"], O["wall_front"], O["stem"]]
 LIT = ("moon", "moon_fill", "porch", "porch_key")
 DARK = ("moon", "moon_fill")
 
-# camera toàn cảnh cho các pass *_pano: cùng vị trí camera gốc, hướng level (fwd = phần ngang hướng nhìn, up = z)
+# panoramic camera for the *_pano passes: same position as the original camera, level orientation (fwd = horizontal part of the view direction, up = z)
 PANO_W, PANO_H = 3200, 2400
 PANO_LON, PANO_LAT = (-80.0, 80.0), (-62.0, 58.0)
 _f = cam.matrix_world.to_quaternion() @ Vector((0, 0, -1))
@@ -210,7 +210,7 @@ PANO_FWD = Vector((_f.x, _f.y, 0)).normalized()
 PANO_RIGHT = PANO_FWD.cross(Vector((0, 0, 1))).normalized()
 _pd = bpy.data.cameras.new("cam_pano")
 _pd.type = "PANO"
-_pd.panorama_type = "EQUIRECTANGULAR"         # Cycles: tâm ảnh = −Z của camera, lon dương sang phải, lat dương lên
+_pd.panorama_type = "EQUIRECTANGULAR"         # Cycles: image centre = camera −Z, positive lon to the right, positive lat up
 _pd.longitude_min, _pd.longitude_max = (math.radians(a) for a in PANO_LON)
 _pd.latitude_min, _pd.latitude_max = (math.radians(a) for a in PANO_LAT)
 _pd.clip_start, _pd.clip_end = cam.data.clip_start, cam.data.clip_end
@@ -225,22 +225,22 @@ def use_pano(on):
     r.resolution_x, r.resolution_y = (PANO_W, PANO_H) if on else (W, H)
 
 
-NOPUMP = SKIN + INNER                         # nền: bí + lòng bí không hiện, không đổ bóng
-# 1. nền (PNG 16-bit tạm để chia lấy bóng bí, rồi đổi sang JPG)
+NOPUMP = SKIN + INNER                         # background: pumpkin + interior invisible, cast no shadow
+# 1. background (temporary 16-bit PNG to divide out the pumpkin shadow, then converted to JPG)
 state(LIT, lantern=6.0, cam_vis=ENV, shadow_off=NOPUMP)
 render("bg_lit", "PNG16")
 state(DARK, lantern=0.025, cam_vis=ENV, shadow_off=NOPUMP)
 render("bg_dark", "PNG16")
-# độ sâu: đúng trạng thái hình học của bg_lit/bg_dark (bí không hiện với camera)
+# depth: exactly the geometric state of bg_lit/bg_dark (pumpkin invisible to the camera)
 state(LIT, lantern=6.0, cam_vis=ENV, shadow_off=NOPUMP)
 render_depth("bg_depth")
-# 1b. bóng quả bí: render lại dải quanh/trước quả bí (bóng đèn hiên kéo tới đáy khung), lần này bí đổ bóng
+# 1b. pumpkin shadow: re-render the band around/in front of the pumpkin (the porch-light shadow reaches the frame bottom), this time the pumpkin casts shadows
 BAND_Y0 = max(0, int(CY0 - 0.3 * S))
 state(LIT, lantern=6.0, cam_vis=ENV, band_y0=BAND_Y0)
 render("bg_lit_sh", "PNG16")
 state(DARK, lantern=0.025, cam_vis=ENV, band_y0=BAND_Y0)
 render("bg_dark_sh", "PNG16")
-# ánh nến: chỉ một nguồn sáng ở tâm bí, bí không chặn sáng; xuất tuyến tính để app nhân thẳng
+# candlelight: a single light at the pumpkin centre, the pumpkin doesn't block light; exported linear so the app can multiply directly
 raw_view = "Standard"
 for v in ("Raw", "Standard"):
     try:
@@ -251,7 +251,7 @@ for v in ("Raw", "Standard"):
         pass
 state(("candle_glow",), lantern=0.0, world=0.0, sky=0.0, cam_vis=ENV, hidden=SKIN + INNER, view="Standard")
 render("bg_glow", "JPEG", samples=64)
-# 1c. nền toàn cảnh, cùng ba trạng thái ánh sáng
+# 1c. panorama backgrounds, same three lighting states
 use_pano(True)
 state(LIT, lantern=6.0, cam_vis=ENV, shadow_off=NOPUMP)
 render("bg_lit_pano", "JPEG")
@@ -263,20 +263,20 @@ state(("candle_glow",), lantern=0.0, world=0.0, sky=0.0, cam_vis=ENV, hidden=SKI
 render("bg_glow_pano", "JPEG", samples=64)
 use_pano(False)
 
-# 2. vỏ ngoài
+# 2. outer skin
 state(LIT, lantern=6.0, cam_vis=SKIN, hidden=INNER, transparent=True, crop=True)
 render("skin_lit")
 state(DARK, lantern=0.025, cam_vis=SKIN, hidden=INNER, transparent=True, crop=True)
 render("skin_dark")
 
-# 3. lòng bí: nửa trước (vỏ + thành trong + cuống) ẩn khỏi camera nhưng vẫn chặn sáng
+# 3. pumpkin interior: front half (skin + inner wall + stem) hidden from the camera but still blocks light
 inside = [o for o in ALL if o not in ENV and o not in FRONT and o is not O["skin_back"]]
 state(("candle",), lantern=0.0, world=0.0, sky=0.0, cam_vis=inside, transparent=True, crop=True)
 render("interior_lit")
 state(LIT, lantern=6.0, cam_vis=inside, transparent=True, crop=True)
 render("interior_unlit")
 
-# 4. dữ liệu: normal theo không gian camera + mặt nạ cuống, vật liệu phát sáng ghi đè
+# 4. data: camera-space normal + stem mask, emissive material override
 def emit_override(name, kind):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -330,18 +330,18 @@ stem_path = with_materials({O["skin_front"]: black, O["skin_back"]: black, O["st
 r.filter_size = 1.5
 
 
-# ── hậu kỳ bằng numpy ──
+# ── numpy post-processing ──
 def load(path):
     im = bpy.data.images.load(path, check_existing=False)
     w, h = im.size
     a = np.empty(w * h * 4, np.float32)
     im.pixels.foreach_get(a)
     bpy.data.images.remove(im)
-    return a.reshape(h, w, 4)[::-1]          # hàng 0 = trên cùng
+    return a.reshape(h, w, 4)[::-1]          # row 0 = top
 
 
 def load_srgb(path):
-    """Như load() nhưng luôn trả giá trị đã mã hoá sRGB như trong file (PNG 16-bit được Blender đọc thành tuyến tính)."""
+    """Like load() but always returns the sRGB-encoded values as stored in the file (Blender reads 16-bit PNG as linear)."""
     im = bpy.data.images.load(path, check_existing=False)
     w, h = im.size
     fl = im.is_float
@@ -355,7 +355,7 @@ def load_srgb(path):
 
 
 def png_to_jpg(src, dst, q=88):
-    """PNG 16-bit → JPG: lấy giá trị sRGB như trong file, ghi qua ảnh 8-bit mới (ảnh load từ PNG giữ định dạng PNG khi save)."""
+    """16-bit PNG → JPG: take the sRGB values as stored in the file, write through a new 8-bit image (an image loaded from PNG keeps PNG format on save)."""
     a = load_srgb(src)
     h, w = a.shape[:2]
     rgba = np.ones((h, w, 4), np.float32)
@@ -369,11 +369,11 @@ def png_to_jpg(src, dst, q=88):
 
 
 def save_gray_png(a, path):
-    """PNG xám 8-bit một kênh (ghi tay bằng zlib: Blender chỉ lưu RGB/RGBA)."""
+    """Single-channel 8-bit grey PNG (written by hand with zlib: Blender only saves RGB/RGBA)."""
     import struct, zlib
     h, w = a.shape
     px = (np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8)
-    raw = np.concatenate([np.zeros((h, 1), np.uint8), px], 1).tobytes()     # mỗi hàng: filter 0 + dữ liệu
+    raw = np.concatenate([np.zeros((h, 1), np.uint8), px], 1).tobytes()     # each row: filter 0 + data
 
     def chunk(t, d):
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
@@ -396,7 +396,7 @@ def save(arr, path, alpha=False):
 
 
 def blur(a, rad_px):
-    """Box blur 3 lần ≈ gauss (theo trục, có pad)."""
+    """3× box blur ≈ gaussian (per axis, padded)."""
     for _ in range(3):
         for ax in (0, 1):
             k = max(1, int(rad_px))
@@ -411,7 +411,7 @@ nm = load(normal_path)
 st = load(stem_path)
 alpha = nm[..., 3]
 n = nm[..., :3] * 2 - 1
-nz = -n[..., 2]                           # không gian camera của Cycles: +x phải, +y lên, +z hướng vào cảnh
+nz = -n[..., 2]                           # Cycles camera space: +x right, +y up, +z into the scene
 stem = blur((st[..., 0] > 0.2).astype(np.float32), 6 * PCT / 100) > 0.02
 carv = ((nz > 0.45) & (alpha > 0.99) & ~stem).astype(np.float32)
 s = max(1.0, 3.0 * PCT / 100)
@@ -421,7 +421,7 @@ save(data, os.path.join(OUT, "data.png"))
 
 for name in ("skin_lit", "skin_dark", "interior_lit", "interior_unlit"):
     os.replace(os.path.join(TMP, name + ".png"), os.path.join(OUT, name + ".png")) if os.path.exists(os.path.join(TMP, name + ".png")) else None
-# bóng quả bí = (nền có bóng) / (nền không bóng), theo độ sáng (luma) của giá trị trong ảnh
+# pumpkin shadow = (background with shadow) / (background without shadow), on the luma of the image values
 for st in ("lit", "dark"):
     p0, p1 = os.path.join(TMP, f"bg_{st}.png"), os.path.join(TMP, f"bg_{st}_sh.png")
     if not (os.path.exists(p0) and os.path.exists(p1)):
@@ -430,9 +430,9 @@ for st in ("lit", "dark"):
     luma = lambda a: a[..., 0] * 0.2126 + a[..., 1] * 0.7152 + a[..., 2] * 0.0722
     y0_, y1_ = blur(luma(a0), max(1.0, PCT / 100)), blur(luma(a1), max(1.0, PCT / 100))
     ratio = np.clip((y1_ + 0.004) / (y0_ + 0.004), 0, 1)
-    dev = np.clip((1 - ratio - 0.012) / 0.988, 0, 1)            # bỏ nhiễu rất nhỏ quanh 1
+    dev = np.clip((1 - ratio - 0.012) / 0.988, 0, 1)            # drop very small noise around 1
     band = int(BAND_Y0 * PCT / 100)
-    dev[:band + int(24 * PCT / 100)] = 0                          # ngoài dải đã render (và mép dải) = không bóng
+    dev[:band + int(24 * PCT / 100)] = 0                          # outside the rendered band (and the band edge) = no shadow
     save_gray_png(1 - dev, os.path.join(OUT, f"shadow_{st}.png"))
     print("SHADOW", st, "min", round(float(ratio.min()), 3), "px<0.98:", int((dev > 0.02).sum()))
 for name in ("bg_lit", "bg_dark"):
@@ -458,7 +458,7 @@ if os.path.exists(flesh):
 # ── layout.json (pt) ──
 pt = lambda p: [round(c / PT, 2) for c in to_px(p)]
 mw = cam.matrix_world
-R3 = mw.to_3x3().transposed()                     # thế giới → camera
+R3 = mw.to_3x3().transposed()                     # world → camera
 f_pt = cam.data.lens / cam.data.sensor_width * W / PT
 C = Vector(sc["pc_center"])
 rad_ = sc["pc_radius"]
@@ -472,9 +472,9 @@ layout = {
     "pumpkin": {"c": list(C), "r": list(rad_)},
     "cam": {"pos": list(mw.translation), "rot": [list(R3[i]) for i in range(3)], "f": round(f_pt, 3)},
     "floor": {"z": 0.0, "front": -0.62},
-    # độ sâu bg_depth*.png: v/255 = ln(d/min)/ln(max/min), d = khoảng cách theo tia từ cam.pos (m), 255 = trời
+    # depth bg_depth*.png: v/255 = ln(d/min)/ln(max/min), d = distance along the ray from cam.pos (m), 255 = sky
     "depth": {"min": DEPTH_MIN, "max": DEPTH_MAX},
-    # ánh nến (m, thế giới): nguồn của bg_glow (tâm lòng bí), tâm ngọn lửa thật, độ dày vỏ ở xích đạo
+    # candlelight (m, world): bg_glow source (pumpkin interior centre), real flame centre, skin thickness at the equator
     "glowSrc": [round(c, 5) for c in sc.get("pc_glow_src", list(C))],
     "flameW": [round(c, 5) for c in sc["pc_flame"]],
     "shell": round(float(sc.get("pc_shell", 0.017)), 5),
@@ -482,13 +482,13 @@ layout = {
              "lon": list(PANO_LON), "lat": list(PANO_LAT)},
 }
 if "pc_roof" in sc:
-    # mái hiên che mưa: [xmin, xmax, ymin, ymax, zEave] (m) — hình chiếu bằng của mái (tới mép diềm), zEave = mép trên
-    # diềm mái; trong hộp này và dưới zEave không có mưa (ymax = mặt tường nhà / mép sau mái)
+    # porch roof sheltering from rain: [xmin, xmax, ymin, ymax, zEave] (m) — plan view of the roof (to the fascia edge), zEave = top edge
+    # of the fascia; no rain inside this box and below zEave (ymax = house wall face / back edge of the roof)
     layout["roof"] = [round(float(c), 4) for c in sc["pc_roof"]]
 if "pc_floor_edge" in sc:
     fe = [float(c) for c in sc["pc_floor_edge"]]
-    # mép sàn hiên (z = 0): trước y = yFront, trái x = xLeft, phải x = xRight; mép sau y = yBack chỉ hở ra sân khi
-    # x < xBackOpenMax (lan can sau), phần còn lại là tường nhà
+    # porch floor edges (z = 0): front y = yFront, left x = xLeft, right x = xRight; the back edge y = yBack only opens onto the yard when
+    # x < xBackOpenMax (back railing), the rest is the house wall
     layout["floorEdge"] = {"z": 0.0, "yFront": fe[0], "xLeft": fe[1], "xRight": fe[2], "yBack": fe[3], "xBackOpenMax": fe[4]}
 json.dump(layout, open(os.path.join(OUT, "layout.json"), "w"), indent=1)
 print("LAYOUT", json.dumps(layout["crop"]), layout["flame"])

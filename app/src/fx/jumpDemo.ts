@@ -2,14 +2,14 @@ import { useAnimatedReaction, useSharedValue, type SharedValue } from "react-nat
 import { PUMPKIN_ASPECT, type PumpkinJump } from "./jump";
 
 /**
- * Kịch bản chạm cho demo/quay clip (giây, tính từ mốc start):
- * một cú nhảy lẻ → nghỉ → tung hứng 5 cú liên tiếp → cú thứ 5 bay vào Dynamic Island.
+ * Tap script for the demo / clip recording (seconds, from the start mark):
+ * one single jump → pause → juggle 5 taps in a row → the 5th one flies into the Dynamic Island.
  */
 export const SCRIPT_TAPS = [0, 1.5, 1.75, 2.15, 2.65, 3.25];
 
 /**
- * Tự bấm theo kịch bản: khi `start` ≥ 0, lần lượt gọi jump.tap tại các mốc start + taps[i],
- * điểm chạm xen kẽ trái/phải trên thân bí (để bí trôi qua lại). Đặt start = −1 để dừng/reset.
+ * Auto-taps per the script: when `start` ≥ 0, calls jump.tap at each start + taps[i],
+ * tap points alternate left/right on the pumpkin body (so it drifts back and forth). Set start = −1 to stop/reset.
  */
 export function useScriptedTaps(opts: {
   time: SharedValue<number>;

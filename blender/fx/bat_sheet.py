@@ -1,18 +1,18 @@
-# Nướng sprite sheet dơi cho app/src/fx/Bats.tsx (Blender headless, không dùng MCP):
+# Bakes the bat sprite sheet for app/src/fx/Bats.tsx (headless Blender, no MCP):
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python blender/fx/bat_sheet.py -- [--cell 128] [--samples 24]
-# Ra: app/assets/fx/pfx_bat.png  (+ blender/fx/bat.blend để soi lại)
+# Output: app/assets/fx/pfx_bat.png  (+ blender/fx/bat.blend for inspection)
 #
-# Dơi dựng theo đúng hình học cánh của Bats.tsx (LEAD / TIP3 / TRAIL, đơn vị "k = 1": nửa sải 0,15), thân Y = đầu,
-# X = phải, Z = lưng. Cánh vỗ bằng shape key (góc nhị diện ang + gập ngoài cổ tay fold, cùng công thức với app) → Cycles
-# có motion blur thật của cánh trong một khung (màn trập 1/12 chu kỳ vỗ, như máy quay 60 fps, vỗ 10 Hz, 180°).
+# The bat follows the exact wing geometry of Bats.tsx (LEAD / TIP3 / TRAIL, units "k = 1": half-span 0.15), body Y = head,
+# X = right, Z = back. Wings flap via shape keys (dihedral angle ang + outer fold at the wrist, same formula as the app) → Cycles
+# gets real wing motion blur within one frame (shutter = 1/12 of a flap cycle, like a 60 fps camera, 10 Hz flap, 180°).
 #
-# Bố cục sheet (ô CELL px, camera trực giao ORTHO đơn vị k=1, tâm ô = gốc thân dơi):
-#   cột 0..7  : pha vỗ  phase = i / 8 · 2π
-#   hàng r = az · 3 + el  (az 0..7: góc phương vị 45°/bước, 0 = nhìn từ sau đuôi; el 0..2: −50°, 0°, +50° (nhìn từ dưới/ngang/trên))
-#   nửa trái  (x < 8·CELL): pass A = trăng ngược sáng lạnh + fill yếu (vẽ thường)
-#   nửa phải  (x ≥ 8·CELL): pass B = ánh nến từ dưới–sau (rim + màng cánh trong mờ đỏ cam), vẽ cộng sáng, app tô màu theo
-#                           khoảng cách tới nến
-# Hướng "lên" của mỗi ô = Z thân dơi chiếu vuông góc hướng nhìn (to_track_quat('-Z', 'Y')) — app dựng lại đúng vector đó.
+# Sheet layout (CELL px cells, ORTHO orthographic camera in k=1 units, cell centre = bat body origin):
+#   columns 0..7 : flap phase  phase = i / 8 · 2π
+#   row r = az · 3 + el  (az 0..7: azimuth 45°/step, 0 = viewed from behind the tail; el 0..2: −50°, 0°, +50° (viewed from below/level/above))
+#   left half  (x < 8·CELL): pass A = cold moon backlight + weak fill (normal blending)
+#   right half (x ≥ 8·CELL): pass B = candlelight from below–behind (rim + translucent red-orange wing membrane), additive, app tints by
+#                           distance to the candle
+# Each cell's "up" = the bat body Z projected perpendicular to the view direction (to_track_quat('-Z', 'Y')) — the app rebuilds exactly that vector.
 import bpy, bmesh, math, os, sys
 from mathutils import Vector, Quaternion
 
@@ -33,7 +33,7 @@ os.makedirs(TMP, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 
-# ── hình học cánh (giống Bats.tsx) ──
+# ── wing geometry (same as Bats.tsx) ──
 LEAD = [(0.012, 0.012), (0.055, 0.03), (0.088, 0.026)]
 TIP3 = (0.15, 0.0)
 TRAIL = [((0.112, -0.004), (0.13, -0.034)), ((0.1, -0.012), (0.088, -0.05)), ((0.058, -0.016), (0.02, -0.036))]
@@ -49,14 +49,14 @@ def outline():
             y = (1 - t) ** 2 * prev[1] + 2 * (1 - t) * t * c[1] + t * t * e[1]
             pts.append((x, y))
         prev = e
-    # dọc thân về vai
+    # along the body to the shoulder
     pts.append((0.014, -0.01))
     return pts
 
 def wing_deform(s, c, h, side, ang, fold):
-    """(s sải, c dây cung, h lệch pháp tuyến) → thế giới, cùng công thức wingPt trong Bats.tsx."""
+    """(s span, c chord, h normal offset) → world, same formula as wingPt in Bats.tsx."""
     ss = s if s <= WRIST[0] else WRIST[0] + (s - WRIST[0]) * fold
-    # màng hơi võng (lõm xuống) giữa các ngón
+    # membrane sags slightly (dips down) between the fingers
     camber = -0.006 * math.sin(math.pi * min(1.0, s / 0.15)) * min(1.0, max(0.0, (0.03 - c) / 0.05))
     hh = h + camber
     x = (math.cos(ang) * ss - math.sin(ang) * hh) * side
@@ -68,7 +68,7 @@ def phase_params(p):
     fold = 1 - 0.38 * max(0.0, math.cos(p))
     return ang, fold
 
-# ── vật liệu ──
+# ── materials ──
 def mat_membrane():
     m = bpy.data.materials.new("membrane")
     m.use_nodes = True
@@ -81,7 +81,7 @@ def mat_membrane():
     pb.inputs["Roughness"].default_value = 0.62
     if "Specular IOR Level" in pb.inputs:
         pb.inputs["Specular IOR Level"].default_value = 0.25
-    # vân da màng cánh: nhiễu kéo dài theo sải
+    # wing membrane skin texture: noise stretched along the span
     tex = nt.nodes.new("ShaderNodeTexNoise")
     tex.inputs["Scale"].default_value = 180.0
     tex.inputs["Detail"].default_value = 6.0
@@ -91,8 +91,8 @@ def mat_membrane():
     nt.links.new(tex.outputs["Fac"], bump.inputs["Height"])
     nt.links.new(bump.outputs["Normal"], pb.inputs["Normal"])
     tr = nt.nodes.new("ShaderNodeBsdfTranslucent")
-    tr.inputs["Color"].default_value = (0.85, 0.22, 0.08, 1)  # máu dưới da mỏng: ngược sáng ra đỏ cam
-    # mạch máu: nhiễu dạng vân làm tối chỗ có mạch
+    tr.inputs["Color"].default_value = (0.85, 0.22, 0.08, 1)  # blood under thin skin: backlit it goes red-orange
+    # blood vessels: vein-like noise darkens where vessels are
     vein = nt.nodes.new("ShaderNodeTexVoronoi")
     vein.feature = "DISTANCE_TO_EDGE"
     vein.inputs["Scale"].default_value = 60.0
@@ -114,7 +114,7 @@ def mat_membrane():
 
 MEM_NODES = {}
 def membrane_pass(pas):
-    """A: trăng xuyên màng chỉ ửng nâu đỏ rất tối (dơi vẫn là bóng đen trên nền trời); B: ánh nến xuyên màng đỏ cam."""
+    """A: moonlight through the membrane only gives a very dark reddish-brown glow (the bat stays a black silhouette against the sky); B: candlelight through the membrane goes red-orange."""
     r = MEM_NODES["ramp"].color_ramp.elements
     if pas == "A":
         r[0].color = (0.05, 0.012, 0.008, 1)
@@ -160,10 +160,10 @@ def mat_bone():
 
 M_MEM, M_FUR, M_BONE = mat_membrane(), mat_fur(), mat_bone()
 
-# ── cánh: màng + xương trong một mesh, mỗi đỉnh nhớ (s, c, h, side) để biến dạng theo pha ──
+# ── wing: membrane + bones in one mesh, each vertex remembers (s, c, h, side) to deform by phase ──
 def build_wings():
     bm = bmesh.new()
-    meta = []  # (s, c, h, side) theo thứ tự đỉnh
+    meta = []  # (s, c, h, side) in vertex order
     mat_of_face = []
 
     def add_vert(s, c, h, side):
@@ -172,7 +172,7 @@ def build_wings():
         return v
 
     for side in (-1, 1):
-        # màng: tam giác hoá đa giác viền rồi chia nhỏ (để gập ở cổ tay mượt)
+        # membrane: triangulate the outline polygon then subdivide (so the wrist fold is smooth)
         tmp = bmesh.new()
         tv = [tmp.verts.new((p[0], p[1], 0)) for p in outline()]
         tmp.faces.new(tv)
@@ -193,7 +193,7 @@ def build_wings():
             except ValueError:
                 pass
         tmp.free()
-        # xương: ống mảnh (6 cạnh) theo vai→khuỷu→cổ tay, cổ tay→các đầu ngón, ngón cái nhỏ
+        # bones: thin tubes (6 sides) along shoulder→elbow→wrist, wrist→fingertips, small thumb
         chains = [
             [LEAD[0], LEAD[1], WRIST],
             [WRIST, TIP3],
@@ -212,7 +212,7 @@ def build_wings():
                     c = a[1] + (b[1] - a[1]) * t
                     dx, dy = b[0] - a[0], b[1] - a[1]
                     L = math.hypot(dx, dy)
-                    nx, ny = -dy / L, dx / L  # pháp tuyến trong mặt cánh
+                    nx, ny = -dy / L, dx / L  # normal within the wing plane
                     r = r0 * (1 - 0.45 * t)
                     ring = []
                     for q in range(6):
@@ -240,7 +240,7 @@ def build_wings():
 
 wings, META = build_wings()
 
-# shape key: một key cho mỗi bước 1/16 chu kỳ, khoá tuyến tính theo khung → Cycles nội suy được khi làm motion blur
+# shape keys: one key per 1/16 cycle step, keyed linearly per frame → Cycles can interpolate for motion blur
 CYCLE = 16
 wings.shape_key_add(name="Basis", from_mix=False)
 keys = []
@@ -258,7 +258,7 @@ for fc in wings.data.shape_keys.animation_data.action.fcurves if hasattr(wings.d
     for kp in fc.keyframe_points:
         kp.interpolation = "LINEAR"
 try:
-    # Blender 5: action có layers/strips/channelbags
+    # Blender 5: actions have layers/strips/channelbags
     act = wings.data.shape_keys.animation_data.action
     for layer in getattr(act, "layers", []):
         for strip in layer.strips:
@@ -269,7 +269,7 @@ try:
 except Exception as e:  # noqa
     print("interp:", e)
 
-# ── thân: ellipsoid lông + đầu + tai + mõm + đuôi màng ──
+# ── body: furry ellipsoid + head + ears + snout + tail membrane ──
 def ellipsoid(name, loc, scale, mat, segs=24):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=segs, ring_count=segs // 2, radius=1, location=loc)
     ob = bpy.context.object
@@ -284,7 +284,7 @@ ellipsoid("belly", (0, -0.022, 0.0), (0.0095, 0.02, 0.009), M_FUR)
 ellipsoid("head", (0, 0.04, 0.006), (0.0105, 0.011, 0.0095), M_FUR)
 ellipsoid("snout", (0, 0.052, 0.003), (0.0045, 0.006, 0.004), M_BONE, 12)
 for side in (-1, 1):
-    # tai: chóp nhọn hơi ngả ra sau
+    # ears: pointed tips tilted slightly back
     bpy.ops.mesh.primitive_cone_add(vertices=10, radius1=0.0048, radius2=0.0004, depth=0.017,
                                     location=(side * 0.0055, 0.037, 0.019))
     ear = bpy.context.object
@@ -292,14 +292,14 @@ for side in (-1, 1):
     ear.scale = (1.0, 0.45, 1.0)
     bpy.ops.object.shade_smooth()
     ear.data.materials.append(M_MEM)
-    # mắt: chấm nhỏ bắt sáng
+    # eyes: small dots that catch the light
     ellipsoid(f"eye{side}", (side * 0.0058, 0.0485, 0.0085), (0.0016, 0.0016, 0.0016), M_BONE, 10)
-    # chân sau thò ra mép màng đuôi
+    # hind legs poke out of the tail membrane edge
     bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=0.0011, depth=0.02, location=(side * 0.012, -0.044, -0.001))
     leg = bpy.context.object
     leg.rotation_euler = (math.radians(90), 0, math.radians(side * 25))
     leg.data.materials.append(M_BONE)
-# màng đuôi (uropatagium) giữa hai chân và đuôi
+# tail membrane (uropatagium) between the legs and the tail
 bm = bmesh.new()
 pts = [(-0.02, -0.036), (-0.016, -0.058), (0.0, -0.074), (0.016, -0.058), (0.02, -0.036), (0.0, -0.03)]
 vs = [bm.verts.new((x, y, -0.001 - 0.004 * (1 - abs(x) / 0.02))) for x, y in pts]
@@ -316,14 +316,14 @@ sc.render.engine = "CYCLES"
 sc.cycles.samples = SAMPLES
 sc.cycles.use_denoising = True
 sc.cycles.device = "CPU"
-# CPU: GPU đang bận render cảnh của agent chính; ô 128 px nên CPU đủ nhanh
+# CPU: the GPU is busy rendering the main agent's scene; 128 px cells so CPU is fast enough
 sc.cycles.use_auto_tile = False
 sc.render.film_transparent = True
 sc.render.resolution_x = CELL
 sc.render.resolution_y = CELL
 sc.render.resolution_percentage = 100
 sc.render.use_motion_blur = True
-sc.render.motion_blur_shutter = min(1.0, CYCLE / 12)  # khung (pha) → 1/12 chu kỳ
+sc.render.motion_blur_shutter = min(1.0, CYCLE / 12)  # frame (phase) → 1/12 cycle
 try:
     sc.render.motion_blur_position = "CENTER"
 except Exception:
@@ -354,9 +354,9 @@ def sun(name, color, energy):
     sc.collection.objects.link(o)
     return o
 
-moon = sun("moon", (0.72, 0.8, 1.0), 3.2)    # trăng phía sau–trên–trái dơi (so với người xem) → viền lạnh
-fill = sun("fill", (0.42, 0.45, 0.6), 0.35)  # ánh trời đêm từ phía người xem: chỉ đủ thấy khối
-candle = sun("candle", (1.0, 1.0, 1.0), 9.0) # pass B: ánh nến dưới–sau → viền + màng cánh trong mờ
+moon = sun("moon", (0.72, 0.8, 1.0), 3.2)    # moon behind–above–left of the bat (relative to the viewer) → cold rim
+fill = sun("fill", (0.42, 0.45, 0.6), 0.35)  # night-sky light from the viewer's side: just enough to read the form
+candle = sun("candle", (1.0, 1.0, 1.0), 9.0) # pass B: candlelight from below–behind → rim + translucent wing membrane
 
 def aim(o, F):
     o.rotation_euler = F.normalized().to_track_quat("Z", "Y").to_euler()
@@ -392,9 +392,9 @@ for az in range(AZ):
                 p = os.path.join(TMP, f"{pas}_{az}_{el}_{ph}.png")
                 render_to(p)
                 paths[(pas, az, el, ph)] = p
-        print(f"az {az} el {el} xong", flush=True)
+        print(f"az {az} el {el} done", flush=True)
 
-# ── ghép sheet ──
+# ── assemble the sheet ──
 W, H = PHASES * CELL * 2, AZ * EL * CELL
 sheet = bpy.data.images.new("pfx_bat", W, H, alpha=True)
 import array
@@ -406,7 +406,7 @@ for (pas, az, el, ph), p in paths.items():
     col = ph + (PHASES if pas == "B" else 0)
     row = az * EL + el
     x0 = col * CELL
-    y0 = H - (row + 1) * CELL  # pixels của Blender tính từ dưới lên
+    y0 = H - (row + 1) * CELL  # Blender pixels count from the bottom up
     for y in range(CELL):
         src = y * CELL * 4
         dst = ((y0 + y) * W + x0) * 4

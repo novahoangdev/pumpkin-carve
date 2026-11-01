@@ -1,7 +1,7 @@
 #!/bin/bash
-# Tấm ghép duyệt nhanh: chạy demo bản hiện tại (debug app + Metro demo của agent chính, cổng 8081) trên sim chính, quay,
-# trích ~12 khung (thứ tự trái → phải, trên → dưới theo các mốc; REUSE=1 dùng lại bản quay trước) ở các mốc chính (giờ app) → render/preview/review-<HHMM>.png
-#   TS=<EXPO_PUBLIC_TIMESCALE của Metro> (mặc định 0.5) UDID=<sim> tools/review.sh [mốc…]
+# Quick review sheet: run the current demo (debug app + main agent's demo Metro, port 8081) on the main sim, record,
+# extract ~12 frames (left → right, top → bottom in time order; REUSE=1 reuses the previous recording) at the key times (app time) → render/preview/review-<HHMM>.png
+#   TS=<Metro's EXPO_PUBLIC_TIMESCALE> (default 0.5) UDID=<sim> tools/review.sh [times…]
 set -e
 cd "$(dirname "$0")/.."
 UDID=${UDID:-CA7F5A01-D288-47E0-9CED-0EFBED4178D1}; TS=${TS:-0.5}; PORT=${PORT:-8081}
@@ -19,7 +19,7 @@ ffmpeg -y -loglevel error -i $D/raw.mov -vf "setpts=$TS*PTS,fps=60,scale=440:-2"
 fi
 F0=$(ffmpeg -loglevel error -i $D/s.mp4 -vf "scale=64:-1,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - \
   | awk '/pts_time/{split($0,a,"pts_time:"); t=a[2]+0} /YAVG/{split($0,b,"="); print t, b[2]+0}' | python3 tools/sync.py 20.107 | awk '{print $1-20.107}')
-echo "app t=0 ở giây $F0 của bản quay (đã nén)"
+echo "app t=0 at second $F0 of the recording (compressed)"
 rm -f $D/f_*.png; ins=(); i=0
 for a in $TIMES; do
   ffmpeg -y -loglevel error -ss $(python3 -c "print(max(0,$F0+$a))") -i $D/s.mp4 -frames:v 1 \

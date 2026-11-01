@@ -1,9 +1,9 @@
-# Chi tiết hiên nhà cho clip v2: lá thu rụng trên sàn hiên + bậc dưới, đèn lồng cổ (carriage lantern) thay hộp đèn
-# vuông, vài quả bí/bầu nhỏ cạnh cửa, thảm chùi chân xơ dừa, mạng nhện mảnh ở góc cột, dây leo khô quấn cột góc.
-# Chạy cuối build_scene.py (trước khi lưu), dùng chung globals của nó: sc, C_ENV, MB, hexc, img, box, LANTERN, PC, R...
-# Mọi object mới nằm trong collection `env` để render_passes.py coi là nền. RNG riêng, không đụng `random` chung.
+# Porch details for clip v2: fallen autumn leaves on the porch floor + lower step, a carriage lantern replacing the square
+# lamp box, a few small pumpkins/gourds by the door, a coir doormat, a fine spider web in the post corner, dry vines around the corner post.
+# Runs at the end of build_scene.py (before saving), sharing its globals: sc, C_ENV, MB, hexc, img, box, LANTERN, PC, R...
+# Every new object goes in the `env` collection so render_passes.py treats it as background. Own RNG, never touches the shared `random`.
 #
-# PC_PORCH=leaves,lantern,gourds,mat,web,vines   chỉ dựng vài phần (mặc định: tất cả)
+# PC_PORCH=leaves,lantern,gourds,mat,web,vines   build only some parts (default: all)
 import math as _m
 import random as _random_mod
 import bmesh as _bmesh
@@ -13,7 +13,7 @@ from bpy_extras.object_utils import world_to_camera_view as _w2c
 
 _rng = _random_mod.Random(1031)
 _PARTS = set((os.environ.get("PC_PORCH") or "leaves,lantern,gourds,mat,web,vines").split(","))
-_NEW = {}                                   # phần → danh sách object, để kiểm tra đè khung crop của quả bí
+_NEW = {}                                   # part → list of objects, to check overlap with the pumpkin crop frame
 
 
 def _reg(part, ob):
@@ -40,9 +40,9 @@ def _rgba_out(nd):
     return [o for o in nd.outputs if o.type == "RGBA"][0]
 
 
-# ───────────────────────── vật liệu ─────────────────────────
+# ───────────────────────── materials ─────────────────────────
 def _mat_leaf(name, dry=False):
-    """Lá từ atlas 4×2 (alpha thật), nhân với màu riêng từng lá (attribute 'tint' theo góc mặt)."""
+    """Leaves from a 4×2 atlas (real alpha), multiplied by a per-leaf colour ('tint' attribute on face corners)."""
     mb = MB(name)
     atlas = img("leaves_atlas.png")
     tint = mb.node("ShaderNodeAttribute", attribute_name="tint")
@@ -57,15 +57,15 @@ def _mat_leaf(name, dry=False):
         mb.link(t.outputs["Alpha"], mb.bsdf.inputs["Alpha"])
         bw = mb.node("ShaderNodeRGBToBW")
         mb.link(t.outputs["Color"], bw.inputs[0])
-        mb.bump(bw.outputs[0], 0.25)                  # gân lá nổi nhẹ
-    else:                                              # thiếu texture: lá phẳng màu cam đất
+        mb.bump(bw.outputs[0], 0.25)                  # slightly raised leaf veins
+    else:                                              # missing texture: flat earthy-orange leaves
         mb.link(tint.outputs["Color"], mb.bsdf.inputs["Base Color"])
     mb.set(Roughness=0.62 if not dry else 0.75, Specular_IOR_Level=0.35)
     return mb.m
 
 
 def _mat_gourd(name, light, mid, groove, rough=0.45, top=None, speck=0.25):
-    """Vỏ bí/bầu nhỏ: màu theo rãnh múi (attribute 'groove'), lốm đốm, sần nhẹ. top: màu đầu cuống (bầu hai màu)."""
+    """Small pumpkin/gourd skin: colour by rib grooves ('groove' attribute), mottled, slightly bumpy. top: stem-end colour (two-tone gourd)."""
     mb = MB(name)
     attr = mb.node("ShaderNodeAttribute", attribute_name="groove")
     tc = mb.node("ShaderNodeTexCoord")
@@ -91,7 +91,7 @@ def _mat_gourd(name, light, mid, groove, rough=0.45, top=None, speck=0.25):
 
 
 def _mat_iron():
-    """Sắt đen cũ của đèn lồng: kim loại hơi ánh đồng, độ nhám loang."""
+    """Old black iron of the lantern: metal with a slight bronze sheen, patchy roughness."""
     mb = MB("lantern_iron")
     tc = mb.node("ShaderNodeTexCoord")
     nz = mb.noise(60.0, 4.0, tc.outputs["Object"], 0.6)
@@ -104,8 +104,8 @@ def _mat_iron():
     return mb.m
 
 
-# ───────────────────────── 1. lá rụng ─────────────────────────
-_LEAF_TINTS = [  # nhân lên màu gốc của atlas: phần lớn giữ nguyên, vài lá ngả nâu, ít lá khô sẫm
+# ───────────────────────── 1. fallen leaves ─────────────────────────
+_LEAF_TINTS = [  # multiplied onto the atlas colour: most stay as is, some turn brown, a few dark and dry
     ((1.0, 1.0, 1.0), 40), ((1.0, 0.86, 0.78), 20), ((0.92, 0.72, 0.6), 18), ((0.75, 0.6, 0.5), 10),
     ((0.42, 0.32, 0.26), 12),
 ]
@@ -124,8 +124,8 @@ def _pick_tint(dark_bias=0.0):
 
 
 def _add_leaf(bm, tint_l, loc, size, yaw, cell, tilt=(0.0, 0.0), curl=None, rest_z=None, n=5, mat_fn=None):
-    """Một lá: lưới (n+1)², UV vào ô `cell` của atlas, cong dọc gân + mép vểnh, xoay rồi đặt nằm trên mặt z = rest_z.
-    rest_z = None: giữ nguyên toạ độ z của loc (lá treo trên dây leo, mat_fn quyết định hướng)."""
+    """One leaf: (n+1)² grid, UVs into atlas cell `cell`, curled along the midrib + raised edges, rotated then laid on the surface z = rest_z.
+    rest_z = None: keep the z of loc (leaf hanging on a vine, mat_fn decides orientation)."""
     col, row = cell % 4, cell // 4
     u0, v0 = col / 4, 1.0 - (row + 1) / 2
     c1, c2, c3 = curl or (_rng.uniform(-0.10, 0.2), _rng.uniform(0.0, 0.16), _rng.uniform(-0.06, 0.06))
@@ -159,7 +159,7 @@ def _add_leaf(bm, tint_l, loc, size, yaw, cell, tilt=(0.0, 0.0), curl=None, rest
 
 
 def _floor_z(x, y):
-    """Mặt đỡ lá: sàn hiên z = 0, thảm chùi chân dày 1,2 cm, bậc dưới z = -0,19."""
+    """Surface a leaf rests on: porch floor z = 0, doormat 1.2 cm thick, lower step z = -0.19."""
     if y < FRONT_EDGE:
         return -0.19
     if _MAT_X0 < x < _MAT_X1 and _MAT_Y0 < y < _MAT_Y1:
@@ -167,23 +167,23 @@ def _floor_z(x, y):
     return 0.0
 
 
-_GOURD_SPOTS = []                           # (x, y, r): lá tránh chỗ đặt bí nhỏ
+_GOURD_SPOTS = []                           # (x, y, r): leaves avoid where the small pumpkins sit
 
 
 def _leaf_ok(x, y, s):
-    if _m.hypot(x - PC.x, y - PC.y) < R + 0.045 + s * 0.45:        # không chui vào/đè chân quả bí chính
+    if _m.hypot(x - PC.x, y - PC.y) < R + 0.045 + s * 0.45:        # don't go into/over the base of the main pumpkin
         return False
-    if -0.6 < y < -0.15 and abs(x) < 0.25 and _rng.random() > 0.04:   # vùng app chiếu bóng mặt khắc: gần như để trống
+    if -0.6 < y < -0.15 and abs(x) < 0.25 and _rng.random() > 0.04:   # area where the app casts the carved-face shadow: keep almost empty
         return False
-    if y > WALL_Y - 0.02 - s * 0.45:                                 # không cắm vào tường / lan can
+    if y > WALL_Y - 0.02 - s * 0.45:                                 # don't stick into the wall / railing
         return False
-    if WALL_X0 - 0.07 - s * 0.4 < x < WALL_X0 + 0.07 + s * 0.4 and y > RAIL_Y - 0.07 - s * 0.4:   # cột góc
+    if WALL_X0 - 0.07 - s * 0.4 < x < WALL_X0 + 0.07 + s * 0.4 and y > RAIL_Y - 0.07 - s * 0.4:   # corner post
         return False
-    if DX0 - 0.16 < x < DX1 + 0.16 and y > WALL_Y - 0.11 - s * 0.4:                          # ngạch cửa
+    if DX0 - 0.16 < x < DX1 + 0.16 and y > WALL_Y - 0.11 - s * 0.4:                          # door threshold
         return False
     if not (-1.35 < x < 2.5 and FRONT_EDGE - 0.3 < y):
         return False
-    if FRONT_EDGE - 0.02 < y < FRONT_EDGE + 0.01 + s * 0.4:       # mép sàn: lá không treo lơ lửng
+    if FRONT_EDGE - 0.02 < y < FRONT_EDGE + 0.01 + s * 0.4:       # floor edge: no leaves hanging in mid-air
         return False
     for gx, gy, gr in _GOURD_SPOTS:
         if _m.hypot(x - gx, y - gy) < gr + s * 0.35:
@@ -193,17 +193,17 @@ def _leaf_ok(x, y, s):
 
 def _leaves():
     bm = _bmesh.new()
-    # (trọng số, hàm sinh x, y, kích thước, độ thiên về lá sẫm)
+    # (weight, x/y generator, size, bias towards dark leaves)
     regions = [
-        (30, lambda: (_rng.uniform(-0.85, -0.36), WALL_Y - 0.05 - abs(_rng.gauss(0, 0.2))), 0.25),   # góc lan can trái
-        (10, lambda: (_rng.uniform(-0.3, 0.3), WALL_Y - 0.06 - abs(_rng.gauss(0, 0.1))), 0.2),      # chân tường sau bí
-        (24, lambda: (_rng.uniform(0.3, 1.0), WALL_Y - 0.12 - abs(_rng.gauss(0, 0.25))), 0.15),     # góc cửa, cạnh thảm
-        (18, lambda: (-_rng.uniform(0.2, 0.5), _rng.uniform(-0.12, 1.1)), 0.1),                    # sàn bên trái bí
-        (18, lambda: (_rng.uniform(0.2, 0.55), _rng.uniform(-0.12, 1.1)), 0.1),                    # sàn bên phải bí
+        (30, lambda: (_rng.uniform(-0.85, -0.36), WALL_Y - 0.05 - abs(_rng.gauss(0, 0.2))), 0.25),   # left railing corner
+        (10, lambda: (_rng.uniform(-0.3, 0.3), WALL_Y - 0.06 - abs(_rng.gauss(0, 0.1))), 0.2),      # wall base behind the pumpkin
+        (24, lambda: (_rng.uniform(0.3, 1.0), WALL_Y - 0.12 - abs(_rng.gauss(0, 0.25))), 0.15),     # door corner, beside the mat
+        (18, lambda: (-_rng.uniform(0.2, 0.5), _rng.uniform(-0.12, 1.1)), 0.1),                    # floor left of the pumpkin
+        (18, lambda: (_rng.uniform(0.2, 0.55), _rng.uniform(-0.12, 1.1)), 0.1),                    # floor right of the pumpkin
         (9, lambda: (lambda a, r: (PC.x + r * _m.cos(a), PC.y + r * _m.sin(a)))(
-            _rng.uniform(rad(-25), rad(205)), _rng.uniform(0.22, 0.3)), 0.1),                      # sát chân bí (sau/hai bên)
-        (4, lambda: (_rng.choice((-1, 1)) * _rng.uniform(0.2, 0.32), _rng.uniform(-0.5, -0.15)), 0.3),  # tiền cảnh: chỉ ở mép khung
-        (8, lambda: (_rng.uniform(-0.6, 0.7), _rng.uniform(FRONT_EDGE - 0.28, FRONT_EDGE - 0.04)), 0.3),  # bậc dưới
+            _rng.uniform(rad(-25), rad(205)), _rng.uniform(0.22, 0.3)), 0.1),                      # right at the pumpkin's base (behind/both sides)
+        (4, lambda: (_rng.choice((-1, 1)) * _rng.uniform(0.2, 0.32), _rng.uniform(-0.5, -0.15)), 0.3),  # foreground: only at the frame edges
+        (8, lambda: (_rng.uniform(-0.6, 0.7), _rng.uniform(FRONT_EDGE - 0.28, FRONT_EDGE - 0.04)), 0.3),  # lower step
     ]
     tot = sum(w for w, _, _ in regions)
     placed = 0
@@ -229,9 +229,9 @@ def _leaves():
     return _reg("leaves", ob)
 
 
-# ───────────────────────── 2. đèn lồng cổ ─────────────────────────
+# ───────────────────────── 2. carriage lantern ─────────────────────────
 def _lathe(bm, prof, sides, rot0=0.0, center=_V()):
-    """Khối tròn xoay (hoặc lăng trụ n cạnh) theo profile [(z, r)], đóng hai đầu. r = 0 ở đầu mút → chụm thành đỉnh."""
+    """Solid of revolution (or n-sided prism) from profile [(z, r)], both ends capped. r = 0 at an end → pinched to a point."""
     rings = []
     for z, r in prof:
         if r <= 1e-6:
@@ -286,7 +286,7 @@ def _torus(bm, center, R_, r_, axis_rot, seg=20, ring=8):
 
 
 def _curve(name, pts, bevel, mat, radii=None, c=None, res=12):
-    """Ống cong mượt (NURBS) qua các điểm, bán kính từng điểm để vuốt nhọn."""
+    """Smooth curved tube (NURBS) through the points, per-point radius for tapering."""
     cu = _bpy.data.curves.new(name, "CURVE")
     cu.dimensions, cu.bevel_depth, cu.bevel_resolution = "3D", bevel, 3
     cu.use_fill_caps = True
@@ -303,13 +303,13 @@ def _curve(name, pts, bevel, mat, radii=None, c=None, res=12):
 
 
 def _lantern():
-    # bỏ hộp đèn vuông của build_scene (giữ vật liệu lantern_glass: render_passes.py điều khiển node "emit" của nó)
+    # remove build_scene's square lamp box (keep the lantern_glass material: render_passes.py drives its "emit" node)
     for ob in [o for o in C_ENV.objects if o.name.startswith("lantern_")]:
         _bpy.data.objects.remove(ob, do_unlink=True)
     L = _V(sc["pc_lantern"])
     iron = _mat_iron()
-    zb, zt, rb, rt = -0.085, 0.115, 0.056, 0.07         # kính: lăng trụ 6 cạnh loe dần lên trên, một mặt quay ra camera
-    # kính phát sáng: điểm nóng giữa ô kính (như có ngọn đèn sau kính), mép ngả cam; trung bình ≈ màu cũ #ffcf87
+    zb, zt, rb, rt = -0.085, 0.115, 0.056, 0.07         # glass: 6-sided prism flaring upwards, one face towards the camera
+    # glowing glass: hot spot mid-pane (as if a flame sits behind it), orange-ish edges; average ≈ old colour #ffcf87
     nt = M_GLASS.node_tree
     em = nt.nodes["emit"]
     tc = nt.nodes.new("ShaderNodeTexCoord")
@@ -328,7 +328,7 @@ def _lantern():
     el[1].position, el[1].color = 1.05, hexc("#e8913a")
     e = el.new(0.45); e.color = hexc("#ffd08a")
     nt.links.new(ln.outputs["Value"], cr.inputs["Fac"])
-    # kính "seeded glass": lốm đốm rất nhẹ
+    # "seeded glass": very faint speckles
     nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 90.0
     nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
     mx = nt.nodes.new("ShaderNodeMix"); mx.data_type = "RGBA"; mx.blend_type = "MULTIPLY"
@@ -343,15 +343,15 @@ def _lantern():
     _reg("lantern", glass)
 
     bm = _bmesh.new()
-    # 6 thanh dọc ở các cạnh kính
+    # 6 vertical bars at the glass edges
     for i in range(6):
         a = 2 * _m.pi * i / 6
         d = _V((_m.cos(a), _m.sin(a), 0))
         _rod(bm, d * (rb + 0.002) + _V((0, 0, zb - 0.004)), d * (rt + 0.002) + _V((0, 0, zt + 0.004)), 0.0042)
-    # đai dưới, chậu đáy thuôn, quả nhọn treo dưới
+    # lower band, tapered bottom bowl, finial hanging below
     _lathe(bm, [(zb - 0.016, rb + 0.008), (zb + 0.007, rb + 0.006)], 6)
     _lathe(bm, [(zb - 0.016, rb + 0.004), (zb - 0.032, rb * 0.72), (zb - 0.05, rb * 0.34), (zb - 0.058, 0.012)], 6)
-    # đai trên, mái chóp 6 mặt hơi lõm có vành hắt, cổ ống khói, nắp
+    # upper band, slightly concave 6-sided roof with a flared rim, chimney neck, cap
     _lathe(bm, [(zt - 0.008, rt + 0.005), (zt + 0.009, rt + 0.007)], 6)
     _lathe(bm, [(zt + 0.008, rt + 0.026), (zt + 0.017, rt + 0.028), (zt + 0.024, rt + 0.012), (zt + 0.042, rt * 0.6),
                 (zt + 0.06, rt * 0.34), (zt + 0.072, 0.022), (zt + 0.084, 0.02), (zt + 0.086, 0.029),
@@ -363,7 +363,7 @@ def _lantern():
     bev.width, bev.segments, bev.limit_method = 0.0012, 1, "ANGLE"
 
     bm = _bmesh.new()
-    # núm trên đỉnh + vòng treo, quả nhọn dưới đáy (tròn, mượt)
+    # top knob + hanging ring, bottom finial (round, smooth)
     _lathe(bm, [(zt + 0.1, 0.005), (zt + 0.106, 0.011), (zt + 0.117, 0.0115), (zt + 0.124, 0.005), (zt + 0.142, 0.0)], 16)
     _lathe(bm, [(zb - 0.056, 0.008), (zb - 0.063, 0.0125), (zb - 0.072, 0.012), (zb - 0.08, 0.006), (zb - 0.097, 0.0)], 16)
     _torus(bm, _V((0, 0, zt + 0.152)), 0.009, 0.0026, _Mx.Rotation(_m.pi / 2, 3, "X"))
@@ -371,11 +371,11 @@ def _lantern():
     fin.location = L
     _reg("lantern", fin)
 
-    # tay treo cổ ngỗng: đế ốp tường bầu dục bên phải đèn, cong lên rồi vươn ra móc vào vòng treo
+    # gooseneck bracket: oval wall plate right of the lantern, curves up then reaches out to hook the hanging ring
     bx = L.x + 0.13
     bm = _bmesh.new()
     _lathe(bm, [(-0.006, 0.0), (-0.006, 0.9), (0.0, 1.0), (0.006, 0.9), (0.006, 0.0)], 28)
-    for v in bm.verts:                                 # đĩa tròn → bầu dục đứng, mặt phẳng song song tường
+    for v in bm.verts:                                 # round disc → upright oval, plane parallel to the wall
         v.co = _V((v.co.x * 0.034, v.co.z, v.co.y * 0.1))
     plate = _mesh_obj("lantern_plate", bm, iron, smooth=True)
     plate.location = (bx, WALL_Y - 0.007, L.z + 0.08)
@@ -385,7 +385,7 @@ def _lantern():
            (bx - 0.06, L.y + 0.04, L.z + 0.345), (L.x + 0.012, L.y + 0.005, L.z + 0.33), (L.x, L.y, z_hook + 0.03),
            (L.x, L.y, z_hook)]
     _reg("lantern", _curve("lantern_arm", arm, 0.0055, iron, [1.2, 1.1, 1.0, 0.95, 0.9, 0.8, 0.75]))
-    # hoa văn xoắn ốc dưới tay treo (song song mặt tường để camera thấy rõ)
+    # scroll ornament under the bracket (parallel to the wall so the camera sees it clearly)
     cx, cz = bx - 0.045, L.z + 0.2
     sp = []
     for k in range(26):
@@ -395,7 +395,7 @@ def _lantern():
         sp.append((cx + rr * _m.cos(a), WALL_Y - 0.035 - 0.012 * t, cz + rr * _m.sin(a)))
     sp.insert(0, (bx + 0.006, WALL_Y - 0.03, L.z + 0.17))
     _reg("lantern", _curve("lantern_scroll", sp, 0.0035, iron, [1.0] * 6 + [0.9] * 10 + [0.7] * 11))
-    # xoắn nhỏ ở đỉnh tay treo
+    # small curl at the top of the bracket
     sp2 = []
     for k in range(18):
         t = k / 17
@@ -406,7 +406,7 @@ def _lantern():
     print("PORCH lantern at", tuple(round(c, 3) for c in L))
 
 
-# ───────────────────────── 3. bí / bầu nhỏ cạnh cửa ─────────────────────────
+# ───────────────────────── 3. small pumpkins / gourds by the door ─────────────────────────
 def _gourd_mesh(name, r, hz, lobes, depth, pear=0.0, seg=72, ring=40):
     bm = _bmesh.new()
     gl = bm.verts.layers.float.new("groove")
@@ -419,7 +419,7 @@ def _gourd_mesh(name, r, hz, lobes, depth, pear=0.0, seg=72, ring=40):
         d = _V((st * _m.cos(ph), st * _m.sin(ph), ct))
         rr *= 1.0 + 0.03 * noise.noise(d * 2.0 + _V((r * 40, 1.3, 0.2)))
         z = r * hz * ct
-        if pear:                                       # bầu hồ lô: đáy phình, cổ thon dài lên trên
+        if pear:                                       # bottle gourd: bulging base, long slender neck
             up = max(0.0, ct)
             rr *= 1.0 - pear * 0.55 * up ** 0.9
             z = r * hz * ct * (1.0 + pear * 1.3 * up)
@@ -457,7 +457,7 @@ def _gourd(name, x, y, r, hz, lobes, depth, mat, yaw=0.0, tilt=0.0, pear=0.0, st
     ob.location = (x, y, -bot_z * _m.cos(tilt) + 0.0005)
     ob.rotation_euler = (tilt, 0, yaw)
     _reg("gourds", ob)
-    # cuống cong ngắn, gốc loe
+    # short curved stem, flared base
     bm = _bmesh.new()
     N, K = 10, 10
     rings = []
@@ -482,13 +482,13 @@ def _gourds():
     white = _mat_gourd("gourd_white", "#f1ead8", "#e2d6b8", "#a89a78", rough=0.5)
     orange = _mat_gourd("gourd_orange", "#f58a2a", "#e06a16", "#8f3a0a", rough=0.42)
     pear = _mat_gourd("gourd_pear", "#e6c24a", "#d4a838", "#5e7a2c", rough=0.35, top="#4e6a26", speck=0.2)
-    # cụm ở góc cửa, bên phải khung crop quả bí chính
+    # cluster at the door corner, right of the main pumpkin's crop frame
     _gourd("gourd_white", 0.51, 1.37, 0.068, 0.66, 10, 0.07, white, yaw=0.4, stem_len=0.028)
     _gourd("gourd_orange", 0.61, 1.25, 0.05, 0.6, 12, 0.08, orange, yaw=1.3, tilt=0.06, stem_len=0.022, stem_r=0.005)
     _gourd("gourd_pear", 0.67, 1.43, 0.038, 0.95, 8, 0.02, pear, yaw=2.2, tilt=0.12, pear=0.8, stem_len=0.018, stem_r=0.004)
 
 
-# ───────────────────────── 4. thảm chùi chân xơ dừa ─────────────────────────
+# ───────────────────────── 4. coir doormat ─────────────────────────
 _MAT_X0, _MAT_X1, _MAT_Y0, _MAT_Y1 = 0.0, 0.0, 0.0, 0.0
 
 
@@ -497,8 +497,8 @@ def _doormat():
     dm = _bpy.data.objects.get("doormat")
     if not dm:
         return
-    # box() của build_scene đã áp cả vị trí vào mesh (gốc object = 0) → dịch tương đối: sang phải 14 cm, chừa chỗ
-    # cho cụm bí nhỏ (trước đây gán location.x = tâm cửa nên thảm lệch hẳn sang phải cửa ~1 m)
+    # build_scene's box() already bakes the position into the mesh (object origin = 0) → shift relatively: 14 cm right, leaving room
+    # for the small pumpkin cluster (it used to set location.x = door centre, so the mat ended up ~1 m right of the door)
     dm.location.x = 0.14
     mb = MB("doormat_coir")
     t = img("doormat_tile.jpg")
@@ -511,7 +511,7 @@ def _doormat():
     else:
         nz = mb.noise(120.0, 6.0, tc.outputs["Object"], 0.7)
         base = mb.ramp(nz.outputs["Fac"], [(0.3, "#5a3a1c"), (0.7, "#a87a44")])
-    # viền thảm sẫm hơn (theo toạ độ Generated của box)
+    # darker mat border (from the box's Generated coordinates)
     sep = mb.node("ShaderNodeSeparateXYZ")
     mb.link(tc.outputs["Generated"], sep.inputs[0])
     edge = mb.node("ShaderNodeMath", operation="MINIMUM")
@@ -525,7 +525,7 @@ def _doormat():
     mb.link(base, _rgba_in(mul, "A")); mb.link(border, _rgba_in(mul, "B"))
     dim = mb.node("ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
     dim.inputs["Factor"].default_value = 1.0
-    mb.link(_rgba_out(mul), _rgba_in(dim, "A")); _rgba_in(dim, "B").default_value = hexc("#9c8670")   # bớt rực cho hợp đêm
+    mb.link(_rgba_out(mul), _rgba_in(dim, "A")); _rgba_in(dim, "B").default_value = hexc("#9c8670")   # less saturated to suit the night
     mb.link(_rgba_out(dim), mb.bsdf.inputs["Base Color"])
     mb.set(Roughness=0.95)
     bw = mb.node("ShaderNodeRGBToBW")
@@ -539,12 +539,12 @@ def _doormat():
     _reg("mat", dm)
 
 
-# ───────────────────────── 5. mạng nhện góc cột – tường ─────────────────────────
+# ───────────────────────── 5. spider web in the post–wall corner ─────────────────────────
 def _cobweb():
     m = MB("cobweb").set(Base_Color=hexc("#c9ced8"), Roughness=0.3, Alpha=0.32, Specular_IOR_Level=0.6)
-    cx, cy = WALL_X0 + 0.055, WALL_Y                   # góc trong: mặt phải cột góc gặp mặt tường
+    cx, cy = WALL_X0 + 0.055, WALL_Y                   # inner corner: right face of the corner post meets the wall
     hub = _V((cx + 0.05, cy - 0.035, 1.87))
-    anchors = [  # bám trên mặt tường (y = WALL_Y) và mặt bên cột (x = cx), một sợi kéo lên khỏi khung hình
+    anchors = [  # anchored on the wall (y = WALL_Y) and the post side (x = cx), one strand running up out of frame
         _V((cx + 0.03, cy - 0.06, 2.16)), _V((cx + 0.17, cy - 0.001, 2.07)), _V((cx + 0.21, cy - 0.001, 1.92)),
         _V((cx + 0.16, cy - 0.001, 1.77)), _V((cx + 0.07, cy - 0.001, 1.69)), _V((cx + 0.001, cy - 0.01, 1.72)),
         _V((cx + 0.001, cy - 0.07, 1.8)), _V((cx + 0.001, cy - 0.08, 1.95)), _V((cx + 0.001, cy - 0.06, 2.08)),
@@ -558,15 +558,15 @@ def _cobweb():
         for k, p in enumerate(pts):
             sp.points[k].co = (*p, 1.0)
 
-    for a in anchors:                                  # sợi toả: võng nhẹ
+    for a in anchors:                                  # radial strands: slight sag
         a += _V((_rng.uniform(-0.015, 0.015), 0, _rng.uniform(-0.02, 0.02)))
         mid = (hub + a) / 2 + _V((0, 0, -0.006))
         strand([hub, mid, a])
     rings, t = [], 0.14
-    while t < 0.86:                                    # khoảng cách vòng không đều, thưa dần ra ngoài
+    while t < 0.86:                                    # uneven ring spacing, sparser towards the outside
         rings.append(t)
         t += _rng.uniform(0.07, 0.13)
-    for t in rings:                                    # vòng xoắn: mỗi đoạn giữa hai sợi toả võng xuống, hay bị đứt
+    for t in rings:                                    # spiral: each segment between two radials sags, often broken
         for i in range(len(anchors)):
             if _rng.random() < 0.3 * t + 0.08:
                 continue
@@ -575,7 +575,7 @@ def _cobweb():
             pa, pb = hub + (a - hub) * ta, hub + (b - hub) * tb
             mid = (pa + pb) / 2 + _V((0, 0, -0.004 * t - 0.002)) + (hub - (pa + pb) / 2) * 0.06
             strand([pa, mid, pb])
-    for _ in range(3):                                 # vài sợi đứt rủ xuống
+    for _ in range(3):                                 # a few broken strands hanging down
         a = anchors[_rng.randrange(2, 7)]
         p0 = hub + (a - hub) * _rng.uniform(0.4, 0.9)
         strand([p0, p0 + _V((_rng.uniform(-0.01, 0.01), 0, -_rng.uniform(0.03, 0.07)))])
@@ -585,7 +585,7 @@ def _cobweb():
     return _reg("web", ob)
 
 
-# ───────────────────────── 6. dây leo khô quấn lan can + cột góc ─────────────────────────
+# ───────────────────────── 6. dry vines around the railing + corner post ─────────────────────────
 def _vines():
     vm = MB("vine")
     tc = vm.node("ShaderNodeTexCoord")
@@ -593,9 +593,9 @@ def _vines():
     vm.link(vm.ramp(nz.outputs["Fac"], [(0.3, "#241a12"), (0.7, "#4a3626")]), vm.bsdf.inputs["Base Color"])
     vm.set(Roughness=0.85)
     vm.bump(nz.outputs["Fac"], 0.4)
-    yf = RAIL_Y - 0.062                                # ngay trước mặt cột góc (mặt trước y ≈ 1.465)
+    yf = RAIL_Y - 0.062                                # just in front of the corner post (front face y ≈ 1.465)
     paths = []
-    # thân chính: bò dọc mặt trước tay vịn (z 0,835–0,885) từ ngoài khung bên trái, tới cột thì quấn lên
+    # main stem: creeps along the front of the handrail (z 0.835–0.885) from off-frame left, winds up at the post
     main = []
     for k in range(9):
         x = -0.95 + k * 0.07
@@ -604,22 +604,22 @@ def _vines():
         z = 0.93 + k * 0.05
         main.append(_V((WALL_X0 - 0.005 + 0.038 * _m.sin(z * 7.5), yf - 0.004 * _m.cos(z * 7.5), z)))
     paths.append((main, 1.0))
-    # sợi phụ quấn bện quanh thân chính trên cột (lệch pha), mảnh hơn
+    # secondary strand braided around the main stem on the post (phase-shifted), thinner
     twin = [_V((WALL_X0 - 0.01 + 0.03 * _m.sin(z * 7.5 + 2.4), yf - 0.006, z)) for z in [0.95 + k * 0.05 for k in range(19)]]
     paths.append((twin, 0.6))
-    # nhánh rủ xuống từ tay vịn dọc cột
+    # branch drooping from the handrail along the post
     down = [_V((WALL_X0 - 0.03, yf, 0.9))]
     for k in range(1, 9):
         z = 0.9 - k * 0.055
         down.append(_V((WALL_X0 - 0.02 + 0.026 * _m.sin(z * 11), yf - 0.002, z)))
     paths.append((down, 0.65))
-    # nhánh rủ qua mép tay vịn bên trái
+    # branch drooping over the left handrail edge
     for x0, n in ((-0.62, 6), (-0.8, 4)):
         d = [_V((x0, RAIL_Y - 0.04, 0.87)), _V((x0 - 0.005, RAIL_Y - 0.045, 0.85))]
         for k in range(1, n):
             d.append(_V((x0 + 0.015 * _m.sin(k * 1.9), RAIL_Y - 0.05, 0.875 - k * 0.05)))
         paths.append((d, 0.55))
-    # nhánh vươn sang tường về phía đèn
+    # branch reaching across the wall towards the lantern
     br = [_V((WALL_X0 + 0.02, yf, 1.52))]
     for k in range(1, 8):
         t = k / 7
@@ -630,7 +630,7 @@ def _vines():
         n = len(pts)
         radii = [w * (1.0 - 0.75 * k / (n - 1)) for k in range(n)]
         _reg("vines", _curve(f"vine{i}", [tuple(p) for p in pts], 0.0042, vm.m, radii, res=6))
-        # lá khô mọc dọc dây, rủ xuống, mặt lá hướng chung về phía camera
+        # dry leaves along the vine, drooping, faces generally towards the camera
         for k in range(1, n):
             if _rng.random() > 0.75:
                 continue
@@ -641,13 +641,13 @@ def _vines():
             rot = (_Mx.Rotation(_rng.uniform(-0.4, 0.4), 3, "Z") @ _Mx.Rotation(-rad(_rng.uniform(60, 95)), 3, "X")
                    @ _Mx.Rotation(yaw + _m.pi, 3, "Z"))
             base = p + _V((side * 0.006, -0.012, 0))
-            # gốc lá ở cuống dây: dời lưới để mép dưới ảnh (cuống lá trong atlas) nằm ở điểm bám
+            # leaf base at the vine: offset the grid so the image's bottom edge (the petiole in the atlas) sits at the anchor point
             _add_leaf(leaf_bm, _pick_tint(0.35), base, s, 0.0, _rng.randrange(8),
                       mat_fn=lambda q, rot=rot, s=s: rot @ (q + _V((0, s * 0.5, 0))))
     _reg("vines", _mesh_obj("vine_leaves", leaf_bm, _mat_leaf("vine_leaf", dry=True), smooth=True))
 
 
-# ───────────────────────── kiểm tra: không đè khung crop của quả bí ─────────────────────────
+# ───────────────────────── check: nothing overlaps the pumpkin crop frame ─────────────────────────
 def _check_crop():
     _bpy.context.view_layer.update()
     W, H = sc.render.resolution_x, sc.render.resolution_y
@@ -666,7 +666,7 @@ def _check_crop():
     x0, y0 = (min(xs) + max(xs)) / 2 - S / 2, (min(ys) + max(ys)) / 2 - S / 2
     dg = _bpy.context.evaluated_depsgraph_get()
     for part, obs in _NEW.items():
-        if part == "leaves":                            # lá nằm sàn: được phép quanh chân bí (đã chừa khoảng cách)
+        if part == "leaves":                            # floor leaves: allowed around the pumpkin base (clearance already kept)
             continue
         for o in obs:
             me = o.evaluated_get(dg).to_mesh()
@@ -675,7 +675,7 @@ def _check_crop():
             vis = [(x, y) for x, y in hit if 0 <= x <= W and 0 <= y <= H]
             inside = [(x, y) for x, y in vis if x0 <= x <= x0 + S and y0 <= y <= y0 + S]
             if inside:
-                print(f"PORCH_WARN {o.name} đè khung crop quả bí ({len(inside)}/{len(vis)} đỉnh)")
+                print(f"PORCH_WARN {o.name} overlaps the pumpkin crop frame ({len(inside)}/{len(vis)} verts)")
             elif vis:
                 print(f"PORCH ok {o.name} px x {min(x for x, _ in vis):.0f}..{max(x for x, _ in vis):.0f}"
                       f" y {min(y for _, y in vis):.0f}..{max(y for _, y in vis):.0f}")

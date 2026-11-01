@@ -21,20 +21,20 @@ import {
   wrap,
 } from "./pfx_atlas";
 
-/** Một lần bắn vụn: tâm và bán kính của lỗ vừa khắc (pt ảnh gốc), thời điểm (giây đồng hồ cảnh). */
+/** One debris burst: center and radius of the just-carved hole (original image pt), time (scene clock seconds). */
 export type Burst = { x: number; y: number; rx: number; ry: number; t: number; seed: number };
 
 const PER_BURST = 9; // FEEDBACK-2300 #2: fewer, small orange-yellow flesh crumbs only (was 18 incl. seeds / big chunks)
-const LIFE = 75; // vụn thật không tự biến mất: nằm lại trên thềm (ửng ánh nến khi thắp), chỉ mờ đi sau rất lâu
-const G = 7.6; // m/s² — gần trọng lực thật, chậm hơn một chút cho mắt kịp thấy
+const LIFE = 75; // real debris does not vanish by itself: it stays on the porch (glowing in candlelight once lit), only fading after a very long time
+const G = 7.6; // m/s² — close to real gravity, slightly slower so the eye can follow
 const TAU = Math.PI * 2;
 
 const SHEET = require("../../assets/fx/pfx_debris.png");
-// pfx_debris.png (ô 64 px, nướng bằng Blender + numpy):
-//   hàng 0–3  vụn thịt bí: 4 hình × 16 hướng đèn (đèn quay quanh trục nhìn, 22,5°/ô)
-//   hàng 4–7  hạt bí: 8 góc lật (0..180°) × 8 hướng đèn, chỉ số = lật·8 + đèn
-//   hàng 8    xơ ruột bí: 2 kiểu × 8 hướng đèn
-//   hàng 9    bóng tiếp đất 64×32 | vệt nhoè 64×16 | quầng tàn lửa 64 | lõi tàn lửa 16 | lấp lánh 32
+// pfx_debris.png (64 px cells, baked with Blender + numpy):
+//   rows 0–3  pumpkin flesh bits: 4 shapes × 16 light directions (light rotating around the view axis, 22.5°/cell)
+//   rows 4–7  pumpkin seeds: 8 flip angles (0..180°) × 8 light directions, index = flip·8 + light
+//   row 8     pumpkin pulp strings: 2 styles × 8 light directions
+//   row 9     contact shadow 64×32 | motion smear 64×16 | ember glow 64 | ember core 16 | sparkle 32
 const C = 64;
 const ROW_SEED = 4 * C;
 const ROW_STRAND = 8 * C;
@@ -49,7 +49,7 @@ const FILL_SEED = 0.875;
 const FILL_STRAND = 0.855;
 
 const MAX_BURSTS = 6;
-const MAX_SPRITES = MAX_BURSTS * PER_BURST * 4; // vệt ướt + bóng + vệt nhoè + thân
+const MAX_SPRITES = MAX_BURSTS * PER_BURST * 4; // wet stain + shadow + motion smear + body
 const EMBERS = 16;
 const MAX_GLOW = EMBERS * 2 + MAX_BURSTS * PER_BURST;
 
@@ -62,18 +62,18 @@ const hash = (n: number) => {
 };
 
 /**
- * Vụn thịt bí, hạt bí, xơ ruột và giọt nước bí bắn ra từ mép lỗ lúc mảnh vỏ sụp — sống trong KHÔNG GIAN CẢNH (mét):
- * sinh trên mặt ellipsoid quả bí đúng chỗ lỗ khắc, bay theo pháp tuyến + hất lên, rơi theo trọng lực, xoay 3D, nảy trên
- * mặt thềm (z = 0) với hệ số nảy riêng (hạt bí nảy, thịt bí ướt dính sàn), trượt có ma sát rồi nằm lại, để vệt ướt.
- * Mọi điểm chiếu qua camera xem (`basis`) nên nhìn quanh / nghiêng máy thì vụn nằm đúng chỗ trên thềm (parallax thật),
- * bị quả bí che khi ở phía sau, to nhỏ theo độ sâu. Hạt "stateless": vị trí tính thẳng từ seed và thời gian.
+ * Pumpkin flesh bits, seeds, pulp strings and juice droplets thrown from the hole edge when the rind piece collapses — living in SCENE SPACE (meters):
+ * spawned on the pumpkin ellipsoid surface right at the carved hole, fly along the normal + tossed up, fall under gravity, spin in 3D, bounce on
+ * the porch plane (z = 0) with per-type restitution (seeds bounce, wet flesh sticks to the floor), slide with friction then settle, leaving wet stains.
+ * Every point is projected through the view camera (`basis`) so when looking around / tilting the phone the debris sits correctly on the porch (real parallax),
+ * hidden by the pumpkin when behind it, sized by depth. "Stateless" particles: position computed directly from seed and time.
  *
- * Hình: sprite Blender (thịt bí ướt có SSS, hạt bí dẹt có gờ, xơ), chọn ô theo hướng đèn chiếu lên màn hình. Hạt bí
- * có hướng 3D thật (pháp tuyến + trục dài): góc lật = góc giữa pháp tuyến và tia nhìn, nằm trên thềm thì thành elip mỏng
- * đúng phối cảnh. Ánh sáng: trước khi thắp là đèn hiên (ấm, từ trên cao) + trăng; sau khi thắp là ánh nến hắt ra.
+ * Look: Blender sprites (wet flesh with SSS, flat ridged seeds, strings), cell chosen by the light direction projected on screen. Seeds
+ * have a real 3D orientation (normal + long axis): flip angle = angle between the normal and the view ray, lying on the porch they become thin
+ * perspective-correct ellipses. Lighting: before lighting the candle it is the porch light (warm, from above) + moon; afterwards the candlelight spilling out.
  *
- * `basis`: camera xem của cảnh. Truyền vào thì vẽ Particles NGOÀI nhóm `pumpkinTransform` (toạ độ màn hình thiết kế).
- * Không truyền thì chiếu bằng camera gốc (= toạ độ ảnh gốc, như bản cũ trong nhóm pumpkinTransform).
+ * `basis`: the scene view camera. When passed, Particles is drawn OUTSIDE the `pumpkinTransform` group (design screen coordinates).
+ * When not passed, projects with the original camera (= original image coordinates, like the old version inside the pumpkinTransform group).
  */
 export function Particles({
   bursts,
@@ -86,12 +86,12 @@ export function Particles({
   time: SharedValue<number>;
   litAt: SharedValue<number>;
   basis?: SharedValue<Basis>;
-  /** cú tiếp đất của quả bí (jump.impacts): vụn đang nằm gần chân bí nảy nhẹ lên theo */
+  /** pumpkin landings (jump.impacts): debris lying near the pumpkin base bounces up slightly with them */
   impacts?: SharedValue<Impact[]>;
 }) {
   const sheet = useGpuImage(SHEET, { mipmapped: true });
 
-  // điểm sinh trên mặt bí (giao tia–ellipsoid) chỉ phụ thuộc burst → tính một lần mỗi khi có burst mới, không phải mỗi frame
+  // spawn point on the pumpkin surface (ray–ellipsoid intersection) depends only on the burst → computed once per new burst, not every frame
   const spawn = useDerivedValue(() => {
     const bs = bursts.value;
     const out: number[][] = [];
@@ -130,11 +130,11 @@ export function Particles({
     const P = [0, 0, 0, 0];
     const Q = [0, 0, 0, 0];
     const R = [0, 0, 0, 0, 0, 0];
-    // hướng đèn trên màn hình: chiếu nguồn sáng
+    // light direction on screen: project the light source
     const lightW = lit ? FLAME_W : LANTERN_W;
     const LS = [0, 0, 0, 0];
     proj(b, lightW[0], lightW[1], lightW[2], LS);
-    // cú đáp gần nhất của quả bí (còn đang làm sàn rung): vị trí chân bí (m) + thời điểm + lực
+    // latest pumpkin landing (floor still shaking): pumpkin base position (m) + time + strength
     const imps = impacts ? impacts.value : null;
     const hits: number[] = [];
     if (imps && imps.length) {
@@ -156,10 +156,10 @@ export function Particles({
         const r1 = hash(k), r2 = hash(k + 1.3), r3 = hash(k + 2.7), r4 = hash(k + 5.9), r5 = hash(k + 8.3), r6 = hash(k + 11.1);
         const t = age - r4 * 0.09;
         if (t <= 0) continue;
-        // 0 hạt bí, 1 vụn thịt, 2 xơ, 3 giọt nước bí
+        // 0 seed, 1 flesh bit, 2 string, 3 juice droplet
         // FEEDBACK-2300 #2: no seeds / strands any more (read as pebbles stuck around the eyes): wet flesh crumbs + juice drops
         const kind: number = i % 3 === 2 ? 3 : 1;
-        // điểm sinh trên mép lỗ (ảnh gốc) → mặt quả bí (m) + pháp tuyến
+        // spawn point on the hole edge (original image) → pumpkin surface (m) + normal
         const o9 = i * 9;
         const S0x = SP[o9], S0y = SP[o9 + 1], S0z = SP[o9 + 2], N0x = SP[o9 + 3], N0y = SP[o9 + 4], N0z = SP[o9 + 5];
         const tx = SP[o9 + 6], tz = SP[o9 + 8];
@@ -181,11 +181,11 @@ export function Particles({
         const e = kind === 0 ? 0.42 : kind === 1 ? 0.2 : kind === 2 ? 0.05 : 0;
         const fr = kind === 0 ? 0.25 : 0.45;
         const mu = kind === 0 ? 0.45 : kind === 3 ? 4 : 0.9;
-        // giọt nước bí: bắn ra từ chính mép cắt, nhỏ và nhanh
+        // juice droplet: shot from the cut edge itself, small and fast
         fall(t, S0x + N0x * 0.01, S0y + N0y * 0.01, S0z + N0z * 0.01, vx, vy, vz, G, rad, e, fr, mu, st);
         let x = st[0], y = st[1], z = st[2];
         const tFirst = st[6], tSlide = st[7], rest = st[8];
-        // bí đáp xuống sàn: vụn đã nằm yên gần chân bí bị nảy nhẹ lên (gần + mạnh thì cao hơn), hơi văng ra ngoài
+        // pumpkin lands on the floor: settled debris near the base hops up slightly (closer + stronger = higher), flung a bit outward
         if (tSlide >= 0) {
           for (let j = 0; j < hits.length; j += 4) {
             if (hits[j + 2] < B.t + r4 * 0.09 + tSlide) continue;
@@ -205,13 +205,13 @@ export function Particles({
         if (behindPumpkin(b.e, x, y, z)) continue;
         proj(b, x, y, z, P);
         if (P[2] < 0.05) continue;
-        const k1 = P[3]; // pt mỗi mét ở độ sâu này
-        // mờ dần cuối đời; giọt nước tan ngay khi chạm sàn
+        const k1 = P[3]; // pt per meter at this depth
+        // fade out at end of life; droplets vanish as soon as they hit the floor
         let alpha = 1 - smoothstep(LIFE - 2.2, LIFE, t);
         if (kind === 3 && tFirst >= 0) alpha = 0;
         if (alpha <= 0.01 && kind !== 3) continue;
 
-        // ── ánh sáng ──
+        // ── lighting ──
         const lightDir = Math.atan2(LS[1] - P[1], LS[0] - P[0]);
         let lr: number, lg: number, lb: number;
         if (lit) {
@@ -221,13 +221,13 @@ export function Particles({
           lg = 0.76 * near;
           lb = 0.6 * near;
         } else {
-          // đèn hiên ấm từ trên cao: cao hơn thì sáng hơn, sát sàn bị chân bí che bớt
+          // warm porch light from above: brighter when higher, partly shadowed by the pumpkin base near the floor
           const hk = 0.56 + 0.16 * Math.min(1, z / 0.18);
           lr = 0.86 * hk;
           lg = 0.82 * hk;
           lb = 0.76 * hk;
         }
-        // độ nhoè vì bay nhanh (pt/s trên màn hình)
+        // motion smear from fast flight (pt/s on screen)
         const airborne = tFirst < 0 || (tSlide < 0 && st[9] > 0 && Math.abs(st[5]) > 0.05);
         let svx = 0, svy = 0;
         if (airborne) {
@@ -237,7 +237,7 @@ export function Particles({
         }
         const speed = Math.hypot(svx, svy);
 
-        // xoay: tốc độ góc giảm mỗi lần nảy, đứng yên khi trượt/nằm
+        // spin: angular speed drops with each bounce, stops when sliding/resting
         const w = (8 + 22 * r5) * (r1 < 0.5 ? -1 : 1);
         const tSpin = tSlide >= 0 ? tSlide : t;
         const spin = tFirst < 0 ? w * t : w * tFirst + w * 0.45 * (tSpin - tFirst);
@@ -254,11 +254,11 @@ export function Particles({
           const br = (0.9 + 0.1 * tumble) * (0.62 + 0.38 * Math.max(lr, 0.5));
           put(bodies, P[0], P[1], 32, 32, D / (C * FILL_CHUNK), spin, li * C, shape * C, C, C, Math.min(1, 1.15 * br), Math.min(1, 0.86 * br), 0.42 * br, alpha);
         } else if (kind === 0) {
-          // hướng 3D của hạt: pháp tuyến n và trục dài a, quay quanh trục xoay riêng khi bay
+          // particle 3D orientation: normal n and long axis a, rotating around its own spin axis in flight
           let ax = r2 - 0.5, ay = r3 - 0.5, az = r6 - 0.5;
           const al = Math.hypot(ax, ay, az) || 1;
           ax /= al; ay /= al; az /= al;
-          // n0, a0 vuông góc nhau
+          // n0, a0 perpendicular to each other
           const n0x = 0, n0y = -1, n0z = 0;
           let a0x = 1, a0y = 0, a0z = 0.2 * (r5 - 0.5);
           const a0l = Math.hypot(a0x, a0y, a0z);
@@ -267,20 +267,20 @@ export function Particles({
           rotv(n0x, n0y, n0z, ax, ay, az, th, R, 0);
           rotv(a0x, a0y, a0z, ax, ay, az, th, R, 3);
           if (tSlide >= 0) {
-            // nằm bẹp trên thềm: pháp tuyến dựng đứng, trục dài nằm ngang (chuyển nhanh trong 60 ms)
+            // lying flat on the porch: normal points up, long axis horizontal (fast transition over 60 ms)
             const u = Math.min(1, (t - tSlide) / 0.06);
             const sz = R[2] >= 0 ? 1 : -1;
             const hl = Math.hypot(R[3], R[4]) || 1;
             R[0] += (0 - R[0]) * u; R[1] += (0 - R[1]) * u; R[2] += (sz - R[2]) * u;
             R[3] += (R[3] / hl - R[3]) * u; R[4] += (R[4] / hl - R[4]) * u; R[5] += (0 - R[5]) * u;
           }
-          // góc lật = góc giữa pháp tuyến hạt và tia nhìn
+          // flip angle = angle between the particle normal and the view ray
           const vx2 = b.e[0] - x, vy2 = b.e[1] - y, vz2 = b.e[2] - z;
           const vl = Math.hypot(vx2, vy2, vz2) || 1;
           const nl = Math.hypot(R[0], R[1], R[2]) || 1;
           const cf = (R[0] * vx2 + R[1] * vy2 + R[2] * vz2) / (vl * nl);
           const flip = Math.acos(Math.max(-1, Math.min(1, cf)));
-          // trục dài chiếu lên màn hình → góc xoay sprite (sprite: trục dài dọc)
+          // long axis projected on screen → sprite rotation (sprite: long axis vertical)
           proj(b, x + R[3] * 0.01, y + R[4] * 0.01, z + R[5] * 0.01, Q);
           const rotS = Math.atan2(Q[1] - P[1], Q[0] - P[0]) - Math.PI / 2;
           const L = sizeM * k1;
@@ -289,7 +289,7 @@ export function Particles({
           const fi = wrap(Math.round(flip / (Math.PI / 8)), 8);
           const li = wrap(Math.round((lightDir - rotS) / (TAU / 8)), 8);
           const idx = fi * 8 + li;
-          // hạt bí màu kem: sprite gốc hơi xám → nhân gần 1, ít khử xanh hơn vụn thịt
+          // cream-colored seed: the source sprite is slightly gray → multiply near 1, less blue removal than flesh bits
           const br = (0.86 + 0.14 * Math.abs(cf)) * 1.3;
           put(bodies, P[0], P[1], 32, 32, L / (C * FILL_SEED), rotS, (idx % 16) * C, ROW_SEED + Math.floor(idx / 16) * C, C, C, Math.min(1, lr * br), Math.min(1, lg * br * 1.02), Math.min(1, lb * br * 0.98), alpha);
         } else if (kind === 2) {
@@ -300,7 +300,7 @@ export function Particles({
           const li = wrap(Math.round((lightDir - rotX) / (TAU / 8)), 8);
           put(bodies, P[0], P[1], 32, 32, L / (C * FILL_STRAND), rotX, ((r6 < 0.5 ? 0 : 8) + li) * C, ROW_STRAND, C, C, lr * 0.95, lg * 0.95, lb * 0.95, alpha);
         } else {
-          // giọt nước bí: chấm sáng nhỏ trong suốt, kéo vệt khi bay
+          // juice droplet: small transparent highlight dot, smeared in flight
           D = sizeM * k1;
           if (tFirst < 0) {
             const len = Math.max(D * 1.2, Math.min(speed * 0.022, D * 6));
@@ -309,10 +309,10 @@ export function Particles({
         }
 
         const hgt = z;
-        // ── vệt ướt trên thềm chỗ vụn / giọt nước đáp: đậm ngay khi chạm, loang nhẹ rồi khô dần ──
+        // ── wet stain on the porch where a bit / droplet lands: dark on contact, spreads slightly then dries ──
         if (tFirst >= 0 && (kind === 1 || kind === 3)) {
           const since = t - tFirst;
-          // điểm chạm đầu tiên: dùng vị trí hiện tại nếu đã nằm yên gần đó (vụn trượt ngắn)
+          // first contact point: use the current position if already settled nearby (short slide)
           proj(b, x, y, 0.0005, Q);
           const ws = (kind === 3 ? sizeM * 5 : sizeM * 2.4) * Q[3] * (0.7 + 0.3 * Math.min(1, since / 0.2));
           const wa = (kind === 3 ? 0.32 : 0.22) * Math.min(1, since / 0.05) * (1 - smoothstep(2.5, 10, since));
@@ -320,7 +320,7 @@ export function Particles({
         }
         if (kind === 3) continue;
 
-        // ── bóng tiếp xúc trên thềm: đậm và gọn dần khi hạt hạ xuống sát sàn ──
+        // ── contact shadow on the porch: darker and tighter as the particle comes down near the floor ──
         if (hgt < 0.08) {
           const k2 = 1 - hgt / 0.08;
           proj(b, x, y, 0, Q);
@@ -328,7 +328,7 @@ export function Particles({
           put(shadows, Q[0], Q[1] + D * 0.08, 32, 16, sw / 64, 0, SPR_SHADOW[0], SPR_SHADOW[1], SPR_SHADOW[2], SPR_SHADOW[3], 0, 0, 0, (lit ? 0.42 : 0.5) * k2 * k2 * alpha);
         }
 
-        // ── vệt nhoè chuyển động (motion blur) khi bay nhanh ──
+        // ── motion smear (motion blur) in fast flight ──
         if (airborne && speed > 160) {
           const len = Math.min(speed * 0.02, D * 3.4);
           const a = 0.3 * smoothstep(160, 600, speed) * alpha;
@@ -336,7 +336,7 @@ export function Particles({
           put(streaks, P[0], P[1], 56, 8, len / 64, Math.atan2(svy, svx), SPR_STREAK[0], SPR_STREAK[1], SPR_STREAK[2], SPR_STREAK[3], sr * lr, sg * lg, sb * lb, a);
         }
 
-        // ── lấp lánh ướt: loé khi mặt vụn bắt đúng góc đèn; vụn nằm yên vẫn còn ánh ướt mờ ──
+        // ── wet sparkle: flashes when a bit catches the light at the right angle; settled bits keep a faint wet sheen ──
         if (kind === 1 && r4 > 0.3) {
           const g = rest ? 0.25 * (0.5 + 0.5 * Math.sin(now * 0.7 + r1 * 9)) : smoothstep(0.86, 1.0, Math.cos(spin * 0.7 + r1 * 6 + 1.3));
           if (g > 0.02) {
@@ -354,7 +354,7 @@ export function Particles({
   const body = useDerivedValue(() => debris.value.body);
   const deb = useSpriteBuffers(body, MAX_SPRITES);
 
-  // ── tàn lửa: sau khi thắp, đốm lửa nhỏ thoát ra qua lỗ khắc phía trên, bốc lên theo hơi nóng (m, chiếu 3D) ──
+  // ── embers: after lighting, small sparks escape through the upper carved holes, rising with the heat (m, 3D projected) ──
   const glow = useDerivedValue(() => {
     const extra = debris.value.glint;
     const la = litAt.value;
@@ -365,7 +365,7 @@ export function Particles({
     const b = basis ? basis.value : BASE_BASIS;
     const out: number[] = extra.length ? extra.slice() : [];
     const bs = bursts.value;
-    // nguồn: các lỗ khắc cao hơn ngọn nến (hơi nóng thoát lên qua đó); không có thì lấy ngay trên nến
+    // sources: carved holes above the candle flame (heat escapes through them); if none, right above the candle
     const srcs: number[][] = [];
     for (let j = 0; j < bs.length; j++) {
       const w = pumpkinWorld(bs[j].x, bs[j].y);
@@ -385,7 +385,7 @@ export function Particles({
       const lifeA = Pd * (0.35 + 0.6 * q1);
       if (a > lifeA) continue;
       const s = srcs[Math.floor(q4 * srcs.length) % srcs.length];
-      // bốc lên (z), trôi ngang theo gió nhẹ, lắc lư; hơi bay ra phía trước khỏi lỗ
+      // rise (z), drift sideways in a light breeze, wobble; drift slightly forward out of the hole
       const x = s[0] + (q2 - 0.5) * s[3] * 1.6 + (q4 - 0.5) * 0.04 * a + Math.sin(a * (2.2 + 2 * q3) + q1 * 6) * (0.006 + 0.01 * q2) * Math.min(1, a);
       const y = s[1] - 0.01 - 0.02 * a * q3;
       const z = s[2] + (0.035 + 0.04 * q3) * a + 0.025 * a * a;

@@ -116,16 +116,16 @@ clean.
 
 `shaders/pumpkin.ts` (PERF): longer flame, curved lean, wind wobble, interior light following the flame tip
 ```diff
- uniform float  lean;       // độ nghiêng ngọn lửa
+ uniform float  lean;       // flame lean
 +uniform float  fStretch;   // flame height × (flameFollow)
 +uniform float  fGust;      // wind: stronger flicker (flameFollow)
 +uniform float3 fTip;       // flame tip offset toward the finger (m): interior light follows it
 @@ flameCol
    float y = -q.y + 7.0;
--  q.x -= lean * max(y, 0.0) * 0.16;               // nghiêng ngược chiều máy
+-  q.x -= lean * max(y, 0.0) * 0.16;               // lean against the device tilt
 -  float wob = (noise(float2(y * 0.22 - time * 8.0, time * 2.7)) - 0.5) * 1.6 * clamp(y / 16.0, 0.0, 1.0);
 -  q.x -= wob;
--  float h = 21.0 * (0.85 + 0.15 * candle);       // chiều cao lửa
+-  float h = 21.0 * (0.85 + 0.15 * candle);       // flame height
 +  float h = 21.0 * (0.85 + 0.15 * candle) * fStretch; // flame height
 +  // lean (against the tilt / toward the finger): bends more toward the tip, like a flame pushed by air
 +  q.x -= lean * max(y, 0.0) * 0.16 * (0.55 + 0.45 * clamp(y / h, 0.0, 1.3));

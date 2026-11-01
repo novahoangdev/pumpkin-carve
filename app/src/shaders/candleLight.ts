@@ -59,10 +59,10 @@ const AXIS = (() => {
 
 
 export const candleLight = Skia.RuntimeEffect.Make(`
-uniform shader maskBlur;   // mask khắc đã blur (px mask)
-uniform shader depthB;     // độ sâu ảnh gốc (log), px = pt · dK
+uniform shader maskBlur;   // blurred carve mask (mask px)
+uniform shader depthB;     // base image depth (log), px = pt · dK
 uniform shader mask;       // crisp carve mask (px mask): keeps teeth / corners that the 9 px blur erases
-uniform float  lk;         // px bản đồ trên mỗi pt
+uniform float  lk;         // map px per pt
 uniform float2 view;
 uniform float3 cam0;
 uniform float3 camX;

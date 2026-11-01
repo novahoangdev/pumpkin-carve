@@ -33,7 +33,7 @@ SCENE = [
     ("  const matchFade = useSharedValue(0);\n",
      """  const matchFade = useSharedValue(0);
 
-  // ── thổi tắt nến (mic hoặc kịch bản demo, fx/blowOut.ts): nến tắt thì que diêm hiện lại trên thềm để chạm thắp lại ──
+  // ── blowing out the candle (mic or demo script, fx/blowOut.ts): once the candle is out the match reappears on the porch, tap it to relight ──
   const blow = useBlowOut({
     time,
     candle,
@@ -56,8 +56,8 @@ SCENE = [
     ("    if (!DEMO) batsAt.set(time.value + 4.2);",
      "    if (!DEMO && batsAt.value < 0) batsAt.set(time.value + 4.2);"),
     # 4. strikeMatch: tap the match after a blow-out → it strikes itself, arcs into the mouth, relights
-    ("  // mốc riêng: callback được đăng ký lại mỗi lần component render",
-     """  /** Nến đã bị thổi tắt: chạm que diêm → que tự quẹt, nhấc lên, hạ vào miệng bí và thắp lại. */
+    ("  // own timing: the callback is re-registered on every component render",
+     """  /** Candle has been blown out: tap the match → it strikes itself, lifts, lowers into the pumpkin's mouth and relights. */
   const strikeMatch = () => {
     "worklet";
     if (blow.outAt.value < 0 || mode.value === "match") return;
@@ -75,11 +75,11 @@ SCENE = [
     );
   };
 
-  // mốc riêng: callback được đăng ký lại mỗi lần component render"""),
+  // own timing: the callback is re-registered on every component render"""),
     # 5. demo: virtual finger taps the match to relight (BLOW_DEMO.relight)
     ("    if (DEMO && litAt.value >= 0 && batsAt.value < 0 && t >= SCRIPT.bats) batsAt.set(t);",
      """    if (DEMO && litAt.value >= 0 && batsAt.value < 0 && t >= SCRIPT.bats) batsAt.set(t);
-    // demo: thổi tắt (BLOW_DEMO) rồi ngón tay ảo chạm que diêm thắp lại
+    // demo: blow out (BLOW_DEMO), then the virtual finger taps the match to relight
     if (DEMO && BLOW_DEMO.relight !== null && blow.outAt.value >= 0) {
       const u = t - BLOW_DEMO.relight;
       if (u > -0.3 && u < 0) finger.set({ x: MATCH_REST.x, y: MATCH_REST.y + 20, a: (u + 0.3) / 0.3 });
@@ -107,30 +107,30 @@ SCENE = [
 ]
 
 SHADER = [
-    ("uniform float  hidden;     // 1: quả bí đang ở trong Dynamic Island",
-     "uniform float  hidden;     // 1: quả bí đang ở trong Dynamic Island\n"
-     "uniform float  gust;       // 0..1 đang bị thổi (fx/blowOut.ts): lửa lùn lại, gợn mạnh\n"
-     "uniform float  ember;      // 0..1 tàn đỏ ở bấc sau khi thổi tắt (lửa co về bấc)"),
-    ("  float y = -q.y + 7.0;                           // 0 = chân lửa (sát bấc), lên trên dương",
-     "  // tắt nến: lửa co về bấc theo candle; tàn đỏ ở đầu bấc\n"
+    ("uniform float  hidden;     // 1: the pumpkin is inside the Dynamic Island",
+     "uniform float  hidden;     // 1: the pumpkin is inside the Dynamic Island\n"
+     "uniform float  gust;       // 0..1 being blown on (fx/blowOut.ts): flame shrinks, strong ripple\n"
+     "uniform float  ember;      // 0..1 red ember on the wick after blowing out (flame shrinks to the wick)"),
+    ("  float y = -q.y + 7.0;                           // 0 = flame base (at the wick), positive upward",
+     "  // candle out: flame shrinks to the wick with candle; red ember at the wick tip\n"
      "  float shrink = ember > 0.0 ? 0.12 + 0.88 * clamp(candle, 0.0, 1.0) : 1.0;\n"
      "  float re = length(float2(q.x, (q.y - 5.2) * 0.75));\n"
      "  float emb = ember * (exp(-re * re / 1.6) * 1.6 + exp(-re / 4.5) * 0.45);\n"
      "  q = float2(q.x, q.y - 7.0) / shrink + float2(0.0, 7.0);\n"
-     "  float y = -q.y + 7.0;                           // 0 = chân lửa (sát bấc), lên trên dương"),
+     "  float y = -q.y + 7.0;                           // 0 = flame base (at the wick), positive upward"),
     ("  float wob = (noise(float2(y * 0.22 - time * 8.0, time * 2.7)) - 0.5) * 1.6 * clamp(y / 16.0, 0.0, 1.0);",
      "  float wob = (noise(float2(y * 0.22 - time * (8.0 + 10.0 * gust), time * 2.7)) - 0.5) * 1.6 * (1.0 + 2.4 * gust) * clamp(y / 16.0, 0.0, 1.0);"),
-    ("  float h = 21.0 * (0.85 + 0.15 * candle);       // chiều cao lửa",
-     "  float h = 21.0 * (0.85 + 0.15 * candle) * (1.0 - 0.12 * gust); // chiều cao lửa (bị thổi: lùn lại chút)"),
+    ("  float h = 21.0 * (0.85 + 0.15 * candle);       // flame height",
+     "  float h = 21.0 * (0.85 + 0.15 * candle) * (1.0 - 0.12 * gust); // flame height (blown on: a bit shorter)"),
     ("  float a = clamp(body * 1.3, 0.0, 1.0) * clamp(candle, 0.0, 1.0);",
-     "  // bị thổi: ánh sáng chập chờn mạnh (candle) nhưng thân lửa vẫn đặc, chỉ bị quật nghiêng\n"
+     "  // blown on: light flickers strongly (candle) but the flame body stays solid, only whipped sideways\n"
      "  float a = clamp(body * 1.3, 0.0, 1.0) * clamp(candle + 0.7 * gust, 0.0, 1.0);"),
     ("  return half4(c * a + half3(0.25, 0.35, 1.0) * blue * (1.0 - a) + half3(1.0, 0.55, 0.2) * halo, a);",
      "  half3 ec = half3(1.0, 0.3, 0.06) * emb + half3(1.0, 0.75, 0.4) * smoothstep(0.9, 1.6, emb) * 0.5;\n"
      "  return half4(c * a + half3(0.25, 0.35, 1.0) * blue * (1.0 - a) + half3(1.0, 0.55, 0.2) * halo + ec, max(a, clamp(emb, 0.0, 1.0) * 0.8));"),
     ("  half3 inside = mix(dim, hot, clamp(candle, 0.0, 1.0));",
      "  half3 inside = mix(dim, hot, clamp(candle, 0.0, 1.0));\n"
-     "  inside += (il.rgb * 0.8 + half3(0.05, 0.012, 0.0)) * half3(1.0, 0.3, 0.1) * ember * 0.55 * E; // tàn đỏ hắt nhẹ lên thành trong"),
+     "  inside += (il.rgb * 0.8 + half3(0.05, 0.012, 0.0)) * half3(1.0, 0.3, 0.1) * ember * 0.55 * E; // red ember casts a faint glow on the inner wall"),
 ]
 
 if __name__ == "__main__":

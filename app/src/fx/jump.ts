@@ -5,74 +5,74 @@ import { fireHaptic, type HapticKind } from "./haptics";
 import { VIEW } from "../scene/layout";
 
 /**
- * Chạm quả bí → bí nhảy; chạm liên tục → tung hứng cao dần rồi bay vào Dynamic Island,
- * nằm trong "Live Activity" một lúc, bị nhả ra rơi về chỗ cũ.
+ * Tap the pumpkin → it jumps; keep tapping → it juggles higher and higher then flies into the Dynamic Island,
+ * stays in a "Live Activity" for a while, gets spat out and falls back to its spot.
  *
- * Mọi giá trị là pt MÀN HÌNH (gốc trên-trái). Mọi chuyển động chạy theo đồng hồ cảnh `time`
- * (useAnimatedReaction), trạng thái nằm trong shared value, không dùng setTimeout.
+ * All values are SCREEN pt (origin top-left). All motion runs on the scene clock `time`
+ * (useAnimatedReaction), state lives in shared values, no setTimeout.
  */
 
 export type Impact = { t: number; x: number; y: number; strength: number };
 export type JumpPhase = "rest" | "air" | "toIsland" | "island" | "drop";
 
-// ── hình học Dynamic Island (pt màn hình, căn giữa theo bề ngang khung thật: 17 Pro Max 440 pt → x = 157). ──
-// Đo trên bản quay sim 17 Pro Max (1320×2868 px): x 157,3 · y 14,0 · w 125,3 · h 36,7.
+// ── Dynamic Island geometry (screen pt, centered on the real frame width: 17 Pro Max 440 pt → x = 157). ──
+// Measured on a 17 Pro Max sim recording (1320×2868 px): x 157.3 · y 14.0 · w 125.3 · h 36.7.
 const ISLAND_W = 125.3;
 export const ISLAND = { x: (VIEW.w - ISLAND_W) / 2, y: 14, w: ISLAND_W, h: 36.7 };
 export const ISLAND_CX = ISLAND.x + ISLAND.w / 2;
 export const ISLAND_CY = ISLAND.y + ISLAND.h / 2;
 /**
- * Kích thước pill khi nở ra như Live Activity (giữ mép trên, nở xuống dưới). Hẹp hơn khoảng giữa giờ và icon
- * status bar (iOS không cho app ẩn chúng), cao để nội dung nằm ở dải dưới camera.
+ * Pill size when expanded like a Live Activity (top edge kept, expands downward). Narrower than the gap between the clock and the
+ * status bar icons (iOS does not let apps hide them), tall so the content sits in the band below the camera.
  */
 export const ISLAND_OPEN = { w: 176, h: 92 };
-/** Tâm dải nội dung dưới camera (bí mini bên trái, BOO! bên phải). */
+/** Center of the content band below the camera (mini pumpkin on the left, BOO! on the right). */
 export const ISLAND_CONTENT_Y = ISLAND.y + ISLAND.h + (ISLAND_OPEN.h - ISLAND.h) / 2 - 2;
 
-/** Mốc thời gian (giây, tính từ islandT = lúc bí bật lên bay vào đảo). */
+/** Timing marks (seconds, since islandT = when the pumpkin launches toward the island). */
 export const ISLAND_TIMING = {
-  fly: 0.58, // bay từ thềm vào tâm đảo
-  hold: 1.6, // nằm trong pill (tính từ lúc tới nơi, gồm cả lúc nở)
-  shake: 0.38, // pill rung lắc trước khi nhả
-  squeeze: 0.13, // pill co thắt lại rồi "phun" bí ra
-  tail: 0.7, // pill hồi về dáng cũ, tắt glow
+  fly: 0.58, // fly from the porch to the island center
+  hold: 1.6, // stay in the pill (from arrival, including the expansion)
+  shake: 0.38, // pill shakes before releasing
+  squeeze: 0.13, // pill contracts then "spits" the pumpkin out
+  tail: 0.7, // pill returns to its original shape, glow off
 };
 export const ISLAND_ARRIVE = ISLAND_TIMING.fly;
 export const ISLAND_SHAKE_AT = ISLAND_ARRIVE + ISLAND_TIMING.hold;
 export const ISLAND_SPIT_AT = ISLAND_SHAKE_AT + ISLAND_TIMING.shake + ISLAND_TIMING.squeeze;
 export const ISLAND_END = ISLAND_SPIT_AT + ISLAND_TIMING.tail;
 
-/** Bề ngang thân bí (pt) khi đã thu nhỏ để chui vừa đảo; bí mini trong IslandPill vẽ đúng cỡ này. */
+/** Pumpkin body width (pt) once shrunk to fit into the island; the mini pumpkin in IslandPill is drawn at exactly this size. */
 export const MINI_BODY = 30;
-/** Chiều cao thân bí / bề ngang (không tính cuống). Tâm bí = đáy − w·ASPECT/2. */
+/** Pumpkin body height / width (excluding the stem). Pumpkin center = bottom − w·ASPECT/2. */
 export const PUMPKIN_ASPECT = 0.74;
 
-/** Thông số nhảy, chỉnh cảm giác ở đây. */
+/** Jump parameters, tune the feel here. */
 export const JUMP = {
   gravity: 2400, // pt/s²
-  heights: [30, 60, 100, 160], // độ cao đỉnh theo số lần chạm liên tiếp
-  spins: [0, 0, 1, 2], // số vòng lộn theo cấp (0 = chỉ lắc nhẹ)
-  islandTaps: 5, // chạm liên tiếp thứ N thì bay vào đảo
-  islandHeight: 220, // hoặc đỉnh dự kiến vượt mức này
-  comboWindow: 0.6, // s sau lần chạm đất vẫn tính là liên tiếp
-  crouch: 0.07, // nhún lấy đà (lần đầu)
-  crouchCombo: 0.04, // nhún khi đang tung hứng
-  crouchSquash: -0.14, // sy ≈ 0.86 lúc nhún
-  launchPop: 2, // vận tốc bật của lò xo co giãn lúc rời đất (cộng với giãn theo vận tốc → sy ≈ 1.12)
-  kickPop: 3.2, // chạm giữa không trung: giật giãn nhẹ
-  minKick: 26, // chạm giữa không: tối thiểu bay thêm chừng này pt
-  squashK: 0.3, // xung nén khi chạm đất = squashK·√v
+  heights: [30, 60, 100, 160], // apex height by consecutive tap count
+  spins: [0, 0, 1, 2], // flips per level (0 = slight wobble only)
+  islandTaps: 5, // the Nth consecutive tap flies into the island
+  islandHeight: 220, // or when the projected apex exceeds this
+  comboWindow: 0.6, // s after landing that still counts as consecutive
+  crouch: 0.07, // crouch wind-up (first jump)
+  crouchCombo: 0.04, // crouch while juggling
+  crouchSquash: -0.14, // sy ≈ 0.86 while crouching
+  launchPop: 2, // squash spring velocity kick on leaving the ground (plus velocity stretch → sy ≈ 1.12)
+  kickPop: 3.2, // mid-air tap: slight stretch jolt
+  minKick: 26, // mid-air tap: fly at least this many pt further
+  squashK: 0.3, // squash impulse on landing = squashK·√v
   restitution: 0.34,
   dropRestitution: 0.36,
-  bounceMin: 70, // pt/s, dưới mức này thì thôi nảy
-  impactMin: 110, // pt/s, dưới mức này không tính impact
-  drift: 9, // pt mỗi lần chạm (đẩy ra phía ngược chỗ chạm), nhân theo cấp
+  bounceMin: 70, // pt/s, below this stop bouncing
+  impactMin: 110, // pt/s, below this it does not count as an impact
+  drift: 9, // pt per tap (pushed away from the tap side), scaled by level
   maxDrift: 34,
-  dropV0: 220, // vận tốc ban đầu lúc bị đảo nhả ra (pt/s, hướng xuống)
-  shakePx: 7, // biên độ rung màn hình ứng với strength 1
+  dropV0: 220, // initial velocity when released by the island (pt/s, downward)
+  shakePx: 7, // screen shake amplitude for strength 1
 };
 
-// lò xo co giãn (q) và lò xo nghiêng (rot) khi ở trên đất
+// squash spring (q) and tilt spring (rot) while on the ground
 const K_Q = 900;
 const C_Q = 13;
 const K_R = 240;
@@ -91,32 +91,32 @@ const M_FALL: number = 6;
 type St = {
   m: number;
   last: number;
-  h: number; // độ cao đáy bí so với lúc nghỉ (pt, dương = lên)
-  vy: number; // dương = lên
+  h: number; // pumpkin bottom height relative to rest (pt, positive = up)
+  vy: number; // positive = up
   dx: number;
   vx: number;
-  goal: number; // đích trôi ngang hiện tại
+  goal: number; // current horizontal drift target
   rot: number;
   w: number;
-  q: number; // co giãn: sy = 1 + q
+  q: number; // squash/stretch: sy = 1 + q
   qv: number;
   combo: number;
-  land: number; // lần chạm đất gần nhất
-  bounces: number; // số lần chạm đất từ lần bật gần nhất
+  land: number; // most recent landing
+  bounces: number; // landings since the most recent launch
   crouchEnd: number;
-  target: number; // độ cao đỉnh đang nhắm
+  target: number; // apex height being aimed for
   level: number;
   pendingIsland: boolean;
-  dir: number; // +1 = trôi sang phải / xoay chiều kim đồng hồ
-  dropped: boolean; // đang nảy/lắc sau khi bị đảo nhả ra
-  // chặng bay vào đảo
+  dir: number; // +1 = drift right / rotate clockwise
+  dropped: boolean; // bouncing/wobbling after being released by the island
+  // island flight leg
   it: number;
   ax: number;
   ay: number;
   arot: number;
   sMini: number;
-  spinTo: number; // góc đích (bội 2π) khi tới đảo
-  hap: number; // cờ haptic của chuỗi đảo
+  spinTo: number; // target angle (multiple of 2π) on reaching the island
+  hap: number; // haptic flags for the island sequence
 };
 
 const INIT: St = {
@@ -165,15 +165,15 @@ const smooth = (u: number) => {
   return x * x * (3 - 2 * x);
 };
 
-/** Góc về bội số 2π gần nhất (để luôn tiếp đất thẳng đứng). */
+/** Angle snapped to the nearest multiple of 2π (so it always lands upright). */
 const nearestTurn = (a: number) => {
   "worklet";
   return Math.round(a / TAU) * TAU;
 };
 
 /**
- * Góc đích để lộn `turns` vòng theo chiều sd và tiếp đất thẳng đứng. Vòng đang lộn dở (>~70°)
- * được tính là một vòng, để không bao giờ phải quay ngược chiều giữa không trung.
+ * Target angle to flip `turns` times in direction sd and land upright. A flip already in progress (>~70°)
+ * counts as one turn, so it never has to rotate backwards mid-air.
  */
 const spinTarget = (rot: number, turns: number, sd: number) => {
   "worklet";
@@ -181,13 +181,13 @@ const spinTarget = (rot: number, turns: number, sd: number) => {
   return Math.abs(base - rot) >= 1.2 ? base + (turns - 1) * TAU * sd : base + turns * TAU * sd;
 };
 
-/** Thời gian còn lại tới khi chạm đất, từ độ cao h với vận tốc vy (dương = lên). */
+/** Time left until touching the ground, from height h with velocity vy (positive = up). */
 const timeToLand = (h: number, vy: number, g: number) => {
   "worklet";
   return (vy + Math.sqrt(Math.max(0, vy * vy + 2 * g * h))) / g;
 };
 
-/** Lực rung màn hình từ các cú tiếp đất gần đây (pt màn hình). */
+/** Screen shake from recent landings (screen pt). */
 export const impactShake = (list: Impact[], t: number) => {
   "worklet";
   let x = 0;
@@ -223,9 +223,9 @@ export function usePumpkinJump(opts: {
   const impacts = useSharedValue<Impact[]>([]);
   const islandT = useSharedValue(-1);
   const phase = useSharedValue<JumpPhase>("rest");
-  /** Rung màn hình (pt) từ các cú tiếp đất, app cộng vào transform của cả cảnh nếu muốn. */
+  /** Screen shake (pt) from landings; the app adds it to the whole scene transform if desired. */
   const shake = useSharedValue({ x: 0, y: 0 });
-  /** Vệt bay khi vào/ra đảo: [x, y, r, t, ...] tâm bí theo pt màn hình. */
+  /** Flight trail into/out of the island: [x, y, r, t, ...] pumpkin center in screen pt. */
   const trail = useSharedValue<number[]>([]);
 
   const setPhase = (p: JumpPhase) => {
@@ -241,7 +241,7 @@ export function usePumpkinJump(opts: {
     if (airborne.get() !== v) airborne.set(v);
   };
 
-  /** Bắt đầu bay vào đảo từ vị trí hiện tại. */
+  /** Start flying into the island from the current position. */
   const startIsland = (s: St, t: number) => {
     "worklet";
     const A = anchor.get();
@@ -261,7 +261,7 @@ export function usePumpkinJump(opts: {
     haptic("medium");
   };
 
-  /** Rời đất sau khi nhún. */
+  /** Leave the ground after the crouch. */
   const launch = (s: St, t: number) => {
     "worklet";
     if (s.pendingIsland) {
@@ -282,7 +282,7 @@ export function usePumpkinJump(opts: {
     haptic("light");
   };
 
-  /** Chạm đất (h ≤ 0, đang rơi). */
+  /** Touch the ground (h ≤ 0, falling). */
   const touchDown = (s: St, t: number) => {
     "worklet";
     const g = JUMP.gravity;
@@ -306,12 +306,12 @@ export function usePumpkinJump(opts: {
       const T = (2 * vb) / g;
       s.goal *= 0.35;
       s.vx = (s.goal - s.dx) / T;
-      // nảy: nghiêng nhẹ một bên rồi tiếp đất lại gần thẳng (không lộn tiếp)
+      // bounce: tilt slightly to one side then land again nearly upright (no further flips)
       const tilt = (Math.random() - 0.5) * 0.2 * strength;
       s.w = (tilt - s.rot) / T;
       s.m = M_AIR;
     } else {
-      // nằm lại trên đất: giữ chút đà xoay + cú lắc ngẫu nhiên để lắc lư rồi đứng yên
+      // settle on the ground: keep a bit of spin momentum + a random jolt to wobble then stand still
       s.w = s.w * 0.3 + (Math.random() - 0.5) * strength * 7;
       s.vy = 0;
       s.vx = 0;
@@ -320,7 +320,7 @@ export function usePumpkinJump(opts: {
     }
   };
 
-  /** Lò xo co giãn + nghiêng + trôi ngang, một bước nhỏ. */
+  /** Squash + tilt + horizontal drift springs, one small step. */
   const springs = (s: St, h: number, grounded: boolean) => {
     "worklet";
     s.qv += (-K_Q * s.q - C_Q * s.qv) * h;
@@ -335,13 +335,13 @@ export function usePumpkinJump(opts: {
   const step = (t: number) => {
     "worklet";
     const prev = st.get();
-    // rung màn hình (chạy cả khi đang nghỉ, vì cú tiếp đất cuối vừa xảy ra)
+    // screen shake (runs even at rest, since the last landing just happened)
     const imp = impacts.get();
     if (imp.length > 0 && t - imp[imp.length - 1].t < 0.6) shake.set(impactShake(imp, t));
     else if (shake.get().x !== 0 || shake.get().y !== 0) shake.set({ x: 0, y: 0 });
 
     if (prev.m === M_REST) {
-      // đang nghỉ: không cấp phát gì, chỉ dọn islandT khi chuỗi đảo đã xong hẳn
+      // at rest: allocate nothing, only clear islandT once the island sequence is fully done
       if (islandT.get() >= 0 && t - prev.it > ISLAND_END) islandT.set(-1);
       return;
     }
@@ -349,7 +349,7 @@ export function usePumpkinJump(opts: {
     let dt = t - s.last;
     s.last = t;
     if (!(dt > 0)) return;
-    if (dt > 0.05) dt = 1 / 60; // app vừa bị treo: đừng nhảy cóc
+    if (dt > 0.05) dt = 1 / 60; // the app just stalled: do not jump ahead
 
     const A = anchor.get();
     const ph = A.w * PUMPKIN_ASPECT;
@@ -366,7 +366,7 @@ export function usePumpkinJump(opts: {
       for (let i = 0; i < n; i++) {
         const tt = t - dt + (i + 1) * h;
         if (s.m === M_CROUCH) {
-          // nhún: ép nhanh về sy ≈ 0.86
+          // crouch: squeeze quickly to sy ≈ 0.86
           s.q += (JUMP.crouchSquash - s.q) * (1 - Math.exp(-45 * h));
           s.qv = 0;
           s.w += (-K_R * s.rot - C_R * s.w) * h;
@@ -403,7 +403,7 @@ export function usePumpkinJump(opts: {
     }
 
     if (s.m === M_TO) {
-      // cung bay: Bezier bậc 2, lao nhanh – lơ lửng giữa chừng – bị hút vào đảo
+      // flight arc: quadratic Bezier, rush out – hang mid-way – get sucked into the island
       const u = clamp((t - s.it) / ISLAND_TIMING.fly, 0, 1);
       const e = u + 0.15 * Math.sin(TAU * u);
       const side = Math.abs(s.ax - ISLAND_CX) > 8 ? Math.sign(s.ax - ISLAND_CX) : s.dir;
@@ -454,7 +454,7 @@ export function usePumpkinJump(opts: {
     }
 
     if (s.m === M_FALL) {
-      // rơi tự do từ tâm đảo về chỗ nghỉ (chỗ nghỉ đi theo anchor nếu camera đang lia)
+      // free fall from the island center back to the rest spot (the rest spot follows the anchor if the camera is panning)
       const tf = Math.max(0, t - (s.it + ISLAND_SPIT_AT));
       const restCy = A.y - ph / 2;
       const H = Math.max(1, restCy - ISLAND_CY);
@@ -473,7 +473,7 @@ export function usePumpkinJump(opts: {
       const tr = trail.get();
       if (f < 0.7) trail.set([...(tr.length >= 40 ? tr.slice(4) : tr), cx, cy, (ph * scl) / 2, t]);
       if (cy >= restCy) {
-        // chạm đất → chuyển sang vật lý nảy bình thường
+        // touched the ground → switch to normal bounce physics
         s.m = M_AIR;
         s.h = 0;
         s.dx = 0;
@@ -491,8 +491,8 @@ export function usePumpkinJump(opts: {
       }
     }
 
-    // ── xuất ra shared value ──
-    // bí là vật rắn: co giãn tối đa ±5 % (FEEDBACK 23:23: stretch 0.16–0.24 làm bí dài như bao / củ cà rốt)
+    // ── output to shared values ──
+    // the pumpkin is a rigid body: squash/stretch at most ±5 % (FEEDBACK 23:23: stretch 0.16–0.24 made it as long as a sack / a carrot)
     const syv = Math.min(1.05, Math.max(0.95, (1 + s.q) * (1 + stretch * 0.25)));
     sy.set(syv);
     sx.set(1 / Math.sqrt(Math.max(0.2, syv)));
@@ -518,7 +518,7 @@ export function usePumpkinJump(opts: {
     (t) => step(t),
   );
 
-  /** Chạm vào bí (worklet, gọi trên UI thread, vd. trong onEnd của Gesture.Tap). x, y: pt màn hình. */
+  /** Tap the pumpkin (worklet, called on the UI thread, e.g. in Gesture.Tap onEnd). x, y: screen pt. */
   const tap = (x: number, _y: number) => {
     "worklet";
     const s: St = { ...st.get() };
@@ -529,11 +529,11 @@ export function usePumpkinJump(opts: {
     s.combo = chain ? s.combo + 1 : 1;
     s.level = Math.min(s.combo - 1, JUMP.heights.length - 1);
     s.target = JUMP.heights[s.level] * (s.combo > JUMP.heights.length ? 1.15 : 1);
-    // chạm bên trái → bí bị đẩy sang phải (và xoay theo chiều đó)
+    // tap on the left → the pumpkin is pushed right (and rotates that way)
     s.dir = x < A.x + s.dx ? 1 : -1;
     const lv = 1 + s.level * 0.6;
     s.goal = clamp(s.goal + s.dir * JUMP.drift * lv, -JUMP.maxDrift, JUMP.maxDrift);
-    if (s.m === M_REST) s.last = t; // đồng hồ bước mô phỏng không chạy lúc nghỉ
+    if (s.m === M_REST) s.last = t; // the simulation step clock does not run at rest
 
     const g = JUMP.gravity;
     const apex = s.m === M_AIR ? s.h + (Math.max(0, s.vy) * Math.max(0, s.vy)) / (2 * g) : 0;
@@ -543,14 +543,14 @@ export function usePumpkinJump(opts: {
       if (toIsland) {
         startIsland(s, t);
       } else {
-        // tung hứng: đá thêm năng lượng, bay cao hơn, lộn nhiều hơn
+        // juggling: kick in more energy, fly higher, flip more
         const need = Math.max(s.target - s.h, JUMP.minKick);
         const vNeed = Math.sqrt(2 * g * need);
         if (s.vy < vNeed) s.vy = vNeed;
         const T = timeToLand(s.h, s.vy, g);
         s.vx = (s.goal - s.dx) / T;
         const turns = JUMP.spins[Math.min(s.level, JUMP.spins.length - 1)];
-        // đang lộn thì giữ chiều đang lộn
+        // already flipping: keep the current flip direction
         const sd = Math.abs(s.w) > 2 ? Math.sign(s.w) : s.dir;
         if (turns > 0) s.w = (spinTarget(s.rot, turns, sd) - s.rot) / T;
         else s.w += s.dir * (0.8 + 0.6 * s.level);
@@ -559,7 +559,7 @@ export function usePumpkinJump(opts: {
         haptic("light");
       }
     } else if (s.m === M_CROUCH) {
-      // đang nhún thì chỉ nâng mục tiêu
+      // while crouching just raise the target
       if (toIsland) s.pendingIsland = true;
     } else {
       s.m = M_CROUCH;
@@ -577,10 +577,10 @@ export function usePumpkinJump(opts: {
 }
 
 /**
- * Transform Skia cho quả bí, đúng thứ tự pivot:
- *   translate(off) → [quanh tâm] rotate(rot)·scale(scale) → [quanh đáy giữa] scale(sx, sy).
- * `bottom`, `center`: đáy giữa và tâm bí lúc nghỉ trong hệ toạ độ đang vẽ;
- * `k`: số pt màn hình ứng với 1 đơn vị hệ đó (vd. fit.k nếu vẽ trong khung thiết kế đã scale).
+ * Skia transform for the pumpkin, with the correct pivot order:
+ *   translate(off) → [around the center] rotate(rot)·scale(scale) → [around the bottom center] scale(sx, sy).
+ * `bottom`, `center`: bottom center and pumpkin center at rest in the coordinate system being drawn;
+ * `k`: screen pt per unit of that system (e.g. fit.k when drawing inside the scaled design frame).
  */
 export const jumpTransform = (
   j: { off: { x: number; y: number }; sx: number; sy: number; rot: number; scale: number },

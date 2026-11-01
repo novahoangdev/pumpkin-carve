@@ -10,7 +10,7 @@
  import { BASE_BASIS, NONE, SAMPLING, behindPumpkin, clamp01, fall, proj, put, smoothstep, useSpriteBuffers, wrap } from "./pfx_atlas";
 +import { useGpuImage } from "../perf/gpu";
  
- const LIFE = 3.4; // s, mọi thứ tắt hẳn sau mốc này (lá rơi chậm + nằm lại một chút)
+ const LIFE = 3.4; // s, everything is fully gone after this mark (leaves fall slowly + linger a bit)
  const RING_LIFE = 0.42;
 @@ -68,7 +69,7 @@
    spread?: number;
@@ -54,7 +54,7 @@
 -  const sheet = useImage(SHEET);
 +  const sheet = useGpuImage(SHEET, { mipmapped: true });
  
-   // ── vận tốc que diêm → lửa nghiêng (lò xo) + dãn; chốt thời điểm/vị trí lửa tắt cho sợi khói ──
+   // ── match velocity → flame tilt (spring) + stretch; latch time/position of flame-out for the smoke wisp ──
    const motion = useSharedValue({ t: -1, x: 0, y: 0, vx: 0, vy: 0 });
 --- a/app/src/fx/Gust.tsx	2026-10-31 16:47:49
 +++ b/app/src/fx/Gust.tsx	2026-10-31 17:10:06
@@ -69,9 +69,9 @@
 +import { useGpuImage } from "../perf/gpu";
  
  /**
-  * Cơn gió cuốn lá phong ở intro (mặc định t ≈ 1,6 s, lúc camera đang cẩu từ trăng xuống):
+  * Gust sweeping maple leaves in the intro (default t ≈ 1.6 s, while the camera cranes down from the moon):
 @@ -165,8 +166,8 @@
-   /** "scene": lá trung cảnh + lá sàn (vẽ sau quả bí, trước mưa); "fg": lá tiền cảnh sát ống kính (vẽ trên sương / atmos) */
+   /** "scene": midground leaves + floor leaves (drawn after the pumpkin, before rain); "fg": foreground leaves right at the lens (drawn over fog / atmos) */
    layer: "scene" | "fg";
  }) {
 -  const fgSheet = useImage(FG_SHEET);
@@ -79,7 +79,7 @@
 +  const fgSheet = useGpuImage(FG_SHEET, { mipmapped: true });
 +  const scSheet = useGpuImage(SC_SHEET, { mipmapped: true });
    const vw = VIEW.w, vh = VIEW.h;
-   // chỉ lớp đang vẽ mới tính (lớp kia giữ 1 sprite rỗng)
+   // only the layer being drawn computes (the other keeps 1 empty sprite)
    const nFg = layer === "fg" ? N_FG : 1;
 --- a/app/src/fx/Particles.tsx	2026-10-31 16:34:59
 +++ b/app/src/fx/Particles.tsx	2026-10-31 17:10:06
@@ -96,13 +96,13 @@
    BASE_BASIS,
    LANTERN_W,
 @@ -88,7 +89,7 @@
-   /** cú tiếp đất của quả bí (jump.impacts): vụn đang nằm gần chân bí nảy nhẹ lên theo */
+   /** pumpkin landings (jump.impacts): debris lying near the pumpkin's base bounces up slightly with them */
    impacts?: SharedValue<Impact[]>;
  }) {
 -  const sheet = useImage(SHEET);
 +  const sheet = useGpuImage(SHEET, { mipmapped: true });
  
-   // điểm sinh trên mặt bí (giao tia–ellipsoid) chỉ phụ thuộc burst → tính một lần mỗi khi có burst mới, không phải mỗi frame
+   // spawn points on the pumpkin surface (ray–ellipsoid hit) depend only on the burst → computed once per new burst, not every frame
    const spawn = useDerivedValue(() => {
 --- a/app/src/fx/Smoke.tsx	2026-10-31 17:00:28
 +++ b/app/src/fx/Smoke.tsx	2026-10-31 17:10:07
@@ -140,10 +140,10 @@
  import { HIDDEN_XF, SAMPLING, proj, smoothstep, wrap } from "./pfx_atlas";
 +import { useGpuImage } from "../perf/gpu";
  
- /** Số dơi (= số điểm đích của chữ). synth_audio.py đọc hằng số này. */
+ /** Bat count (= number of target points of the lettering). synth_audio.py reads this constant. */
  export const BAT_COUNT = 390;
 @@ -163,7 +164,7 @@
-  * phát object / mảng mỗi frame.
+  * allocating objects / arrays every frame.
   */
  export function Bats({ t0, time, basis }: { t0: SharedValue<number>; time: SharedValue<number>; basis: SharedValue<Basis> }) {
 -  const sheet = useImage(SHEET);

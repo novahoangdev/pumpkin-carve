@@ -1,63 +1,63 @@
-# Feedback anh Hoa lúc 16:30, 31/10. Sửa trước khi quay bản cuối
+# Feedback from Hoa at 16:30, 31/10. Fix before recording the final version
 
-Ảnh nằm cùng thư mục: `fog-layer-bug.png`, `water-fake.png`, `opening-angle.png`.
+Images in the same folder: `fog-layer-bug.png`, `water-fake.png`, `opening-angle.png`.
 
-## 1. Sương bị lỗi layer (`fog-layer-bug.png`), giao cho ATMOS
+## 1. Fog layer bug (`fog-layer-bug.png`), assigned to ATMOS
 
-Khi nhìn sang trái, sương là một dải sáng phẳng, mép trên cứng như cắt bằng thước. Dải này phủ lên chân cột lan can như một lớp dán đè. Cột gần và xa bị phủ đậm như nhau, nên trông giống tấm ảnh dán chứ không phải sương.
+When looking left, the fog is a flat bright band with a hard top edge, as if cut with a ruler. The band covers the feet of the railing posts like a sticker. Near and far posts are covered equally densely, so it looks like a pasted image rather than fog.
 
-Cách sửa:
-- Tính sương theo **độ sâu thật** (`bg_depth` / `bg_depth_pano`). Mật độ sương là tích phân sương theo độ cao (`exp(-h/H)`) dọc tia nhìn, từ mắt đến điểm cảnh.
-  - Vật gần (cột lan can gần, mép sàn) gần như không có sương.
-  - Xa ngoài sân thì sương dày.
-- Không có mép cứng nào: độ cao đỉnh sương mờ dần, và nhiễu cuộn của sương neo theo toạ độ thế giới, không theo màn hình.
-- Sương phải đứng yên trong không gian khi yaw/pitch thay đổi.
-- Sương không được sáng hơn ánh trăng hắt lên nó. Sương ở gần đèn hiên và gần bí (khi đã thắp) thì ấm hơn.
-- Kiểm ở yaw −0,66 và +0,62 (hai mốc nhìn quanh trong demo) và lúc nghiêng.
+Fix:
+- Compute fog from **real depth** (`bg_depth` / `bg_depth_pano`). Fog density is the integral of height fog (`exp(-h/H)`) along the view ray, from the eye to the scene point.
+  - Near objects (near railing posts, floor edge) have almost no fog.
+  - Fog is thick far out in the yard.
+- No hard edges anywhere: the fog top height fades out, and the fog's rolling noise is anchored in world coordinates, not screen coordinates.
+- Fog must stay fixed in space when yaw/pitch change.
+- Fog must not be brighter than the moonlight falling on it. Fog near the porch lamp and near the pumpkin (once lit) is warmer.
+- Check at yaw −0.66 and +0.62 (the two look-around marks in the demo) and while tilting.
 
-## 2. Nước cần tự nhiên hơn (`water-fake.png`), giao cho ATMOS (+ agent chính nếu phải sửa pass Blender)
+## 2. Water needs to look more natural (`water-fake.png`), assigned to ATMOS (+ main agent if the Blender pass needs fixing)
 
-Dải sáng xanh dọc chân lan can bị cháy sáng và nhoè thành vệt khói xanh, trông giả. Vệt mưa bắn ở mép sàn là các gạch ngắn đứng yên.
+The blue glow strip along the foot of the railing is blown out and smeared into a blue smoky streak, looks fake. Rain splashes at the floor edge are short static dashes.
 
-Cách sửa:
-- **Bỏ quầng xanh phát sáng.** Sàn ướt nghĩa là gỗ **tối hơn**, bão hoà hơn và có phản chiếu sắc nét theo Fresnel.
-  - Phản chiếu gồm trăng, đèn hiên, cửa sổ nhà bên, và ánh bí sau khi thắp.
-  - Nhìn càng xiên thì phản chiếu càng mạnh.
-- **Gợn mưa rơi:** vòng tròn nhỏ loang ra rồi tắt, trong toạ độ thế giới trên mặt phẳng sàn.
-  - Khoảng 15–30 vòng cùng lúc, chỉ ở vùng ướt mép ngoài.
-  - Các vòng làm méo phản chiếu bằng normal của gợn.
-- Vũng nước có hình dạng không đều (dọc khe ván và mép ngoài), không đặt thành một băng thẳng.
-- Thêm chi tiết thật: **giọt nước nhỏ từ mép mái và thanh trên lan can** xuống sàn, mỗi giọt chạm sàn tạo một gợn. Chi tiết rẻ mà nhìn rất thật.
-- Hạt bắn tung (splash) nhỏ, sống ngắn khoảng 0,15 s, không có vệt đứng yên.
-- Giữ 120 fps: gợn tính trong shader bằng hàm của thời gian, không dùng hạt CPU.
+Fix:
+- **Remove the glowing blue halo.** A wet floor means the wood is **darker**, more saturated, and has sharp Fresnel reflections.
+  - Reflections include the moon, the porch lamp, the neighbour's windows, and the pumpkin glow once lit.
+  - The more grazing the view, the stronger the reflection.
+- **Raindrop ripples:** small circles that spread out then fade, in world coordinates on the floor plane.
+  - About 15–30 rings at once, only in the wet area at the outer edge.
+  - The rings distort the reflections via the ripple normal.
+- Puddles have irregular shapes (along the board gaps and the outer edge), not laid out as a straight band.
+- Add a real detail: **water dripping from the roof edge and the railing's top rail** onto the floor, each drop making a ripple where it lands. Cheap detail that looks very real.
+- Small splash particles, short-lived about 0.15 s, no static streaks.
+- Keep 120 fps: ripples computed in the shader as a function of time, no CPU particles.
 
-## 3. Mở đầu mới, "động đáo" hơn (`opening-angle.png`), giao cho agent chính (+ FX)
+## 3. New, more dynamic opening (`opening-angle.png`), assigned to the main agent (+ FX)
 
-Anh Hoa không thích góc máy hiện tại. Bí nằm nhỏ ở mép phải, nửa dưới khung là sàn trống, phần mái phía trên tối, nên mở app vào nhìn rất phẳng.
+Hoa doesn't like the current camera angle. The pumpkin sits small at the right edge, the bottom half of the frame is empty floor, the roof above is dark, so opening the app feels very flat.
 
-### 3a. Khung nghỉ mới (góc máy chính sau intro)
-- Góc thấp, ngang tầm quả bí.
-- Bí to khoảng 50–55% bề ngang màn hình, đặt **giữa theo chiều ngang**, hơi dưới tâm (khoảng 58% chiều cao).
-- Đèn hiên và trăng vẫn nằm trong khung phía trên.
-- Bớt sàn trống phía trước.
-- Có hai cách làm, agent chính chọn cách nhanh và đúng hơn:
-  - (a) Đổi view mặc định (yaw/pitch/zoom, thêm `oy` để hạ mắt).
-  - (b) Đặt lại camera Blender, nếu đằng nào cũng đang render lại pass cuối.
-- Nếu chọn (a): kiểm toàn bộ toạ độ đang tính theo khung gốc (stencil `CENTER`, `matchTarget`, Dynamic Island, hạt) để vẫn đúng chỗ.
+### 3a. New rest frame (main camera angle after the intro)
+- Low angle, at pumpkin height.
+- Pumpkin about 50–55% of the screen width, **centred horizontally**, slightly below centre (about 58% of the height).
+- Porch lamp and moon still in frame at the top.
+- Less empty floor in front.
+- Two ways to do it, the main agent picks whichever is faster and more correct:
+  - (a) Change the default view (yaw/pitch/zoom, add `oy` to lower the eye).
+  - (b) Re-place the Blender camera, if the final pass is being re-rendered anyway.
+- If (a): check every coordinate currently computed from the base frame (stencil `CENTER`, `matchTarget`, Dynamic Island, particles) so they stay in the right place.
 
-### 3b. Kịch bản intro 0,0 → 3,0 s (khắc vẫn bắt đầu ở 3,2 nên không phải dời mốc nào phía sau)
+### 3b. Intro script 0.0 → 3.0 s (carving still starts at 3.2 so no later timings need to move)
 
-| t (s) | Hình | Âm thanh / haptic |
+| t (s) | Visual | Audio / haptic |
 |---|---|---|
-| 0,0–0,45 | Màn tối gần như đen, chỉ thấy vệt mưa lấp lánh. Camera đang ngước nhìn trăng sau mây (pitch ≈ +0,7, zoom ≈ 1,4) | Mưa, sấm rền xa |
-| 0,45 | **Sét mở màn:** chớp 2 nhịp (sáng 70 ms, tối 110 ms, sáng 50 ms). Chữ PUMPKIN CARVE loé lên theo chớp rồi nguội thành màu cam ấm | Sấm nổ, haptic heavy |
-| 0,6–2,3 | **Cẩu máy từ trăng xuống:** pitch lia từ +0,7 về khung nghỉ, yaw quay dần về phía bí, zoom 1,4 → 0,85 → 1,25 (đẩy vào), mắt hạ thấp dần (`oy`). Ease-in-out mạnh, nhanh nhất ở giữa, có motion blur nhẹ theo hướng lia lúc nhanh nhất | Gió vụt |
-| ≈1,4 | Khi camera lướt qua, **đèn hiên chập chờn 2 lần** | Tiếng tách điện nhỏ |
-| ≈1,6 | **Một cơn gió cuốn lá phong** bay ngang sát ống kính (lá tiền cảnh to, mờ do ngoài nét, parallax mạnh) và vài lá trên sàn trượt theo. Phần này giao FX: file mới `app/src/fx/Gust.tsx` | |
-| 2,3–2,9 | Camera dừng ở khung nghỉ bằng spring hơi quá đà một chút rồi đứng yên. Quả bí khẽ lắc (squash nhẹ) như vừa bị gió đẩy | Haptic light |
-| 3,2 | Bắt đầu khắc như cũ | |
+| 0.0–0.45 | Screen almost black, only glinting rain streaks. Camera is looking up at the moon behind clouds (pitch ≈ +0.7, zoom ≈ 1.4) | Rain, distant rumbling thunder |
+| 0.45 | **Opening lightning:** 2-beat flash (bright 70 ms, dark 110 ms, bright 50 ms). The PUMPKIN CARVE title flashes with the lightning then cools to warm orange | Thunderclap, heavy haptic |
+| 0.6–2.3 | **Crane down from the moon:** pitch pans from +0.7 to the rest frame, yaw gradually turns toward the pumpkin, zoom 1.4 → 0.85 → 1.25 (push in), eye gradually lowers (`oy`). Strong ease-in-out, fastest in the middle, light motion blur along the pan direction at peak speed | Wind whoosh |
+| ≈1.4 | As the camera sweeps past, **the porch lamp flickers twice** | Small electric click |
+| ≈1.6 | **A gust sweeps maple leaves** right past the lens (big foreground leaves, out of focus, strong parallax) and a few leaves on the floor slide along. This part goes to FX: new file `app/src/fx/Gust.tsx` | |
+| 2.3–2.9 | Camera settles on the rest frame with a slightly overshooting spring then holds. The pumpkin wobbles slightly (light squash) as if pushed by the wind | Light haptic |
+| 3.2 | Carving starts as before | |
 
-Yêu cầu chung:
-- Toàn bộ intro mượt 120 Hz trên 17 Pro Max.
-- Không tạo object JS nào mỗi frame trong worklet.
-- Motion blur làm rẻ: vài mẫu lệch dọc hướng lia, chỉ bật khi tốc độ lớn.
+General requirements:
+- The whole intro smooth at 120 Hz on the 17 Pro Max.
+- No JS objects created per frame in worklets.
+- Cheap motion blur: a few offset samples along the pan direction, only enabled at high speed.

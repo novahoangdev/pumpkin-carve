@@ -1,38 +1,38 @@
-# Polish 18:15: xem từ `render/preview/rec.png`, `stills.png`, `notes/light/v2-before-after.jpg`
+# Polish 18:15: reviewed from `render/preview/rec.png`, `stills.png`, `notes/light/v2-before-after.jpg`
 
-## Lịch chốt (đăng X lúc 23:00)
-- **21:00** dừng thêm tính năng. Sau mốc này chỉ sửa lỗi và tinh chỉnh nhỏ.
-- **21:15 chậm nhất** bắt đầu quay bản cuối 120 fps và dựng promo. Promo hiện chỉ đạt khoảng 37 khung/phút, mất khoảng 55 phút, nên không được bắt đầu muộn hơn.
-- **22:15** có bản X 60 fps, ảnh xem nhanh và caption.
-- **22:30** giao cho anh Hoa.
-- Bản v4b đang dựng là bản dự phòng: phải luôn có một clip đăng được.
+## Locked schedule (post to X at 23:00)
+- **21:00** feature freeze. After this point only bug fixes and small tweaks.
+- **21:15 at the latest** start recording the final 120 fps version and editing the promo. The promo currently renders only about 37 frames/minute, taking about 55 minutes, so it must not start any later.
+- **22:15** have the 60 fps X version, preview stills and caption.
+- **22:30** hand over to Hoa.
+- The v4b version being edited is the fallback: there must always be a postable clip.
 
-## 1. Mặt bí khổng lồ trên tường nhà: SAI VẬT LÝ, bỏ hoặc thay (LIGHT + agent chính)
-- Lỗ khắc quay về phía camera, còn bức tường nằm **sau** quả bí. Ánh nến qua lỗ khắc không thể in lên tường đó.
-- Ngoài ra mặt in trên tường sáng hơn cả quả bí, và bị cắt cứng theo mép tường và cửa, nên trông như hình dán. Người xem kỹ sẽ thấy giả ngay.
-- Thay bằng 2 thứ đúng vật lý:
-  - (a) **Quầng ấm rất nhẹ** hắt lên tường và cửa phía sau, do ánh xuyên qua vỏ bí và hắt từ sàn. Mềm, không có hình mặt.
-  - (b) **Mỗi lần sét**, ánh chớp từ ngoài trời (bên trái) đổ **bóng đen sắc** của quả bí (và mèo, nếu đang ngồi trên lan can) dài trên tường và cửa bên phải, rồi tắt theo đường cong chớp. Bóng thật nên rất "điện ảnh".
-- Mặt cười khổng lồ chỉ nên có trên **sàn phía trước**, nơi ánh sáng thật sự đi tới.
+## 1. Giant pumpkin face on the house wall: PHYSICALLY WRONG, remove or replace (LIGHT + main agent)
+- The carved holes face the camera, while the wall is **behind** the pumpkin. Candlelight through the carved holes can't land on that wall.
+- On top of that the face on the wall is brighter than the pumpkin itself, and is hard-clipped by the wall and door edges, so it looks like a sticker. A careful viewer will see it's fake right away.
+- Replace with 2 physically correct things:
+  - (a) **A very faint warm glow** on the wall and door behind, from light passing through the rind and bouncing off the floor. Soft, no face shape.
+  - (b) **On each lightning strike**, the flash from outside (left) casts a **sharp black shadow** of the pumpkin (and the cat, if it's sitting on the railing) long across the wall and door on the right, then fades with the flash curve. A real shadow, so very "cinematic".
+- The giant smiley face should only be on the **floor in front**, where the light actually goes.
 
-## 2. Ánh mặt cười trên sàn (LIGHT): v2 đã tốt hơn, cần thêm
-- Mắt đang là hai vệt tròn. Phải ra **hình tam giác** có mép mềm, kiểu sắc gần, mềm xa.
-- Miệng phải có răng.
-- Lõi đang vàng chanh cháy sáng. Hạ xuống màu cam hổ phách, có tone-map, và không được sáng hơn chính lỗ khắc.
-- Vân gỗ và khe ván phải lộ ra trong vùng sáng.
+## 2. Smiley-face light on the floor (LIGHT): v2 is better, needs more
+- The eyes are two round blobs. They must be **triangles** with soft edges, sharp near, soft far.
+- The mouth must have teeth.
+- The core is a blown-out lemon yellow. Bring it down to amber orange, tone-mapped, and never brighter than the carved holes themselves.
+- Wood grain and board gaps must show through in the lit area.
 
-## 3. Dơi xếp chữ HAPPY HALLOWEEN khó đọc (CAT nhận `Bats.tsx` vì tab FX đã đóng)
-- Chữ nhỏ, lẫn vào mặt trên tường và nền tối.
-- Xếp chữ ở vùng trời và trăng phía trên-trái, nơi có nền sáng để bóng dơi đen nổi lên. Chữ to khoảng 80% bề ngang, dày dơi hơn.
-- Viền dơi có ánh trăng và ánh cam, giữ khoảng 1,2 s rồi mới tan về phía camera.
+## 3. Bats spelling HAPPY HALLOWEEN are hard to read (CAT takes `Bats.tsx` since the FX tab is closed)
+- The text is small, blends into the face on the wall and the dark background.
+- Spell the text in the sky and moon area at the top-left, where the bright background makes the black bat silhouettes stand out. Text about 80% of the width, denser bats.
+- Bat rims lit by moonlight and orange glow, hold about 1.2 s before breaking up toward the camera.
 
-## 4. Vụn bí quanh chân bí (CAT nhận `Particles.tsx` / `pfx_atlas.ts`)
-- Vụn đang rải thành một vành đều quanh quả bí, trông như confetti.
-- Cần ít hơn, dồn phía trước (nơi mảnh khắc rơi ra), cỡ khác nhau, có mảnh dính ướt, và bớt bão hoà màu.
+## 4. Pumpkin debris around the pumpkin's foot (CAT takes `Particles.tsx` / `pfx_atlas.ts`)
+- The debris is scattered in an even ring around the pumpkin, looks like confetti.
+- Needs fewer bits, concentrated in front (where the carved pieces fall out), varied sizes, some wet stuck bits, and less saturated colour.
 
-## 5. Tốc độ dựng promo (PERF)
-- 37 khung/phút là quá chậm cho vòng cuối. Tìm cách giảm xuống dưới 20 phút mà không mất chất lượng, rồi ghi vào notes/perf.md cho agent chính:
-  - render mockup một lần rồi ghép video bằng ffmpeg,
-  - hoặc chạy song song nhiều tiến trình,
-  - hoặc dùng Eevee,
-  - hoặc hạ số mẫu ở các khung không cần.
+## 5. Promo render speed (PERF)
+- 37 frames/minute is too slow for the final round. Find a way to get under 20 minutes without losing quality, then write it in notes/perf.md for the main agent:
+  - render the mockup once then composite the video with ffmpeg,
+  - or run several processes in parallel,
+  - or use Eevee,
+  - or lower the sample count on frames that don't need it.
