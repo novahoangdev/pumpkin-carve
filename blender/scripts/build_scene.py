@@ -1,8 +1,8 @@
-# Dựng toàn bộ cảnh bằng code: quả bí ngô (vỏ ngoài + thành trong + cuống + hạt), nến tealight, thềm gỗ, tường nhà,
-# khung cửa, đèn hiên, lan can, phông trời có trăng, camera dọc 1320×2868 (iPhone 17 Pro Max, 440×956 pt @3x). Lưu blender/pumpkin.blend.
+# Build the whole scene in code: the pumpkin (outer skin + inner wall + stem + seeds), tealight candle, wooden porch, house wall,
+# door frame, porch lamp, railing, moonlit sky backdrop, portrait camera 1320×2868 (iPhone 17 Pro Max, 440×956 pt @3x). Saves blender/pumpkin.blend.
 #
-# Chạy: Blender -b --factory-startup -P blender/scripts/build_scene.py
-# Đơn vị mét. Quả bí đặt ở gốc toạ độ, đáy chạm mặt thềm z = 0; camera nhìn theo hướng +y.
+# Run: Blender -b --factory-startup -P blender/scripts/build_scene.py
+# Units are metres. The pumpkin sits at the origin, bottom touching the porch at z = 0; the camera looks along +y.
 import bpy, bmesh, glob, math, os, random
 from mathutils import Vector, Matrix, noise
 
@@ -15,11 +15,11 @@ random.seed(7)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 
-# ── kích thước chính ──
-R = 0.17          # bán kính ngang quả bí
-HZ = 0.74         # tỉ lệ dẹt theo chiều cao
-LOBES = 10        # số múi (một múi nằm chính giữa mặt trước)
-SHELL = 0.10      # thành trong = vỏ ngoài thu nhỏ 10 % (vỏ dày ~1,5 cm)
+# ── main dimensions ──
+R = 0.17          # horizontal radius of the pumpkin
+HZ = 0.74         # vertical squash factor
+LOBES = 10        # number of lobes (one lobe centred on the front face)
+SHELL = 0.10      # inner wall = outer skin scaled down 10 % (skin ~1.5 cm thick)
 CAM_LOC = Vector((0.03, -0.95, 0.36))
 CAM_LENS = 55
 
@@ -50,9 +50,9 @@ def img(name):
     return bpy.data.images.load(p, check_existing=True) if os.path.exists(p) else None
 
 
-# ── vật liệu ──
+# ── materials ──
 class MB:
-    """Helper dựng node vật liệu gọn."""
+    """Compact helper for building material nodes."""
 
     def __init__(self, name):
         self.m = bpy.data.materials.new(name)
@@ -137,7 +137,7 @@ def mat_pumpkin():
     streak_v.inputs["Scale"].default_value = (40.0, 40.0, 3.0)
     mb.link(tc.outputs["Object"], streak_v.inputs["Vector"])
     streak = mb.noise(1.0, 3.0, streak_v.outputs[0])
-    # màu: múi #f07a1a → rãnh #b34a0c, lốm đốm + vệt dọc
+    # colour: lobe #f07a1a → groove #b34a0c, mottling + vertical streaks
     g = mb.node("ShaderNodeMath", operation="ADD")
     mb.link(attr.outputs["Fac"], g.inputs[0])
     sm = mb.node("ShaderNodeMath", operation="MULTIPLY_ADD", use_clamp=True)
@@ -145,7 +145,7 @@ def mat_pumpkin():
     mb.link(sm.outputs[0], g.inputs[1])
     base = mb.ramp(g.outputs[0], [(0.0, "#ff9a2e"), (0.4, "#f37d1c"), (0.8, "#cf5a10"), (1.0, "#9c400a")])
     skin = img("skin_tile.jpg")
-    if skin:   # texture vẽ tay: chỉ lấy biến thiên sáng tối, giữ màu chủ đạo ở ramp
+    if skin:   # hand-painted texture: use only its light/dark variation, keep the base colour from the ramp
         t = mb.tex(skin, tc.outputs["Object"], "BOX")
         mp = mb.node("ShaderNodeMapping"); mp.inputs["Scale"].default_value = (3.0, 3.0, 3.0)
         mb.link(tc.outputs["Object"], mp.inputs["Vector"]); mb.link(mp.outputs[0], t.inputs["Vector"])
@@ -165,7 +165,7 @@ def mat_pumpkin():
     mb.link(rough, mb.bsdf.inputs["Roughness"])
     mb.set(Subsurface_Weight=0.12, Subsurface_Scale=0.01, Specular_IOR_Level=0.3)
     mb.bsdf.inputs["Subsurface Radius"].default_value = (1.0, 0.45, 0.15)
-    # vỏ sần + trầy nhẹ
+    # bumpy skin + light scratches
     pores = mb.noise(220.0, 2.0, tc.outputs["Object"])
     scr_m = mb.node("ShaderNodeMapping"); scr_m.inputs["Scale"].default_value = (1.0, 1.0, 26.0)
     mb.link(tc.outputs["Object"], scr_m.inputs["Vector"])
@@ -227,7 +227,7 @@ def mat_wood(name, tint="#6b5440", scale=1.0, tex_name="wood_tile.jpg", tile=0.9
         mb.link(tc.outputs["Object"], mp.inputs["Vector"])
         grain = mb.noise(3.0, 8.0, mp.outputs[0], 0.7)
         base = mb.ramp(grain.outputs["Fac"], [(0.3, "#3a2e24"), (0.55, tint), (0.8, "#8a7660")])
-    # mỗi tấm ván một sắc độ hơi khác
+    # each board a slightly different shade
     var = mb.ramp(info.outputs["Random"], [(0.0, "#c9c0b8"), (1.0, "#ffffff")])
     mul = mb.node("ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
     mul.inputs["Factor"].default_value = 1.0
@@ -276,19 +276,19 @@ M_GLASS = mat_emit("lantern_glass", "#ffcf87", 6.0)
 M_DIRT = mat_simple("yard", "#0b0e16", 0.95)
 
 
-# ── quả bí ──
+# ── pumpkin ──
 def pumpkin_shape(theta, phi):
-    """Toạ độ điểm trên mặt quả bí theo góc cực theta (0 = đỉnh) và góc phương vị phi."""
+    """Point on the pumpkin surface for polar angle theta (0 = top) and azimuth phi."""
     st, ct = math.sin(theta), math.cos(theta)
     groove = (1.0 - abs(math.sin(LOBES * phi / 2))) ** 2.6
     r = R * (1.0 - 0.075 * groove * st ** 0.6 - 0.012 * math.cos(LOBES * phi) * st)
-    # lệch nhẹ cho tự nhiên
+    # slight irregularity to look natural
     d = Vector((st * math.cos(phi), st * math.sin(phi), ct))
     r *= 1.0 + 0.025 * noise.noise(d * 2.3 + Vector((3.1, 1.7, 0.4)))
     x, y = r * st * math.cos(phi), r * st * math.sin(phi)
     z = R * HZ * ct
-    z -= R * 0.20 * math.exp(-(theta / 0.42) ** 2)            # lõm ở đỉnh quanh cuống
-    z += R * 0.10 * math.exp(-((math.pi - theta) / 0.45) ** 2)  # lõm nhẹ ở đáy
+    z -= R * 0.20 * math.exp(-(theta / 0.42) ** 2)            # dip at the top around the stem
+    z += R * 0.10 * math.exp(-((math.pi - theta) / 0.45) ** 2)  # slight dip at the bottom
     return Vector((x, y, z)), groove * st
 
 
@@ -324,18 +324,18 @@ def build_pumpkin_mesh(name, scale, flip):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
-    # chuyển lớp float của bmesh thành attribute "groove" cho shader
+    # turn the bmesh float layer into a "groove" attribute for the shader
     for p in me.polygons:
         p.use_smooth = True
     return me
 
 
-Z0 = -pumpkin_shape(math.pi, 0.0)[0].z    # nhấc lên để đáy chạm z = 0
-PC = Vector((0.0, 0.0, Z0))                # tâm quả bí
+Z0 = -pumpkin_shape(math.pi, 0.0)[0].z    # lift so the bottom touches z = 0
+PC = Vector((0.0, 0.0, Z0))                # pumpkin centre
 
 
 def split_front_back(me, name, c, mat):
-    """Tách mesh thành nửa trước (về phía camera) và nửa sau để pass lòng bí ẩn được nửa trước."""
+    """Split the mesh into a front half (towards the camera) and a back half so the interior pass can hide the front half."""
     to_cam = (CAM_LOC - PC).normalized()
     parts = {}
     for side in ("front", "back"):
@@ -359,7 +359,7 @@ SKIN = split_front_back(outer, "skin", C_PUMP, M_SKIN)
 WALL = split_front_back(inner, "wall", C_INNER, M_FLESH)
 
 
-# cuống: ống xoắn có gờ, gốc loe, cong về một bên
+# stem: twisted ridged tube, flared base, curving to one side
 def build_stem():
     bm = bmesh.new()
     N, K = 24, 28
@@ -367,10 +367,10 @@ def build_stem():
     rings = []
     for k in range(K + 1):
         t = k / K
-        a_ = t * 1.9                                   # cong dần sang phải rồi gập xuống như cuống khô
+        a_ = t * 1.9                                   # curves gradually to the right then droops like a dry stem
         c = Vector((0.045 * (1 - math.cos(a_)) + 0.004 * math.sin(t * 9), -0.012 * t, top_z - 0.012 + 0.05 * math.sin(a_)))
         rr = 0.014 * (1.0 + 1.3 * math.exp(-t * 8.0)) * (1.0 - 0.35 * t)
-        # mặt cắt vuông góc với hướng cuống
+        # cross-section perpendicular to the stem direction
         tan = Vector((0.045 * math.sin(a_), -0.012 / 1.9, 0.05 * math.cos(a_))).normalized()
         u = tan.cross(Vector((0, 1, 0))).normalized()
         v = tan.cross(u)
@@ -397,7 +397,7 @@ def build_stem():
 STEM = build_stem()
 
 
-# lòng bí: hạt bám đáy và thành sau, vài sợi xơ, nến tealight ở giữa đáy
+# pumpkin interior: seeds stuck to the bottom and back wall, a few strands of pulp, tealight candle in the middle of the bottom
 def inner_point(theta, phi, inset=0.0):
     p, _ = pumpkin_shape(theta, phi)
     return p * (1.0 - SHELL - inset) + Vector((0, 0, Z0))
@@ -411,7 +411,7 @@ def build_seeds():
         th = random.uniform(1.6, 2.9) if n < 45 else random.uniform(0.7, 1.6)
         ph = random.uniform(0, 2 * math.pi)
         p = inner_point(th, ph, 0.004)
-        if (p - PC).dot(to_cam) > -0.02:     # chỉ nửa sau (nhìn thấy qua lỗ khắc)
+        if (p - PC).dot(to_cam) > -0.02:     # back half only (visible through the carved holes)
             continue
         nrm = (PC - p).normalized()
         g = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=1.0)
@@ -454,7 +454,7 @@ def build_strings():
 build_seeds()
 build_strings()
 
-FLOOR_IN = inner_point(math.pi - 0.05, 0.0).z           # đáy trong lòng bí
+FLOOR_IN = inner_point(math.pi - 0.05, 0.0).z           # inner floor of the pumpkin
 CANDLE = Vector((0.0, 0.015, FLOOR_IN + 0.004))
 
 
@@ -480,10 +480,10 @@ def build_candle():
 
 
 WICK_TOP = build_candle()
-FLAME = WICK_TOP + Vector((0, 0, 0.014))     # tâm ngọn lửa (app vẽ lửa procedural ở điểm này)
+FLAME = WICK_TOP + Vector((0, 0, 0.014))     # flame centre (the app draws a procedural flame at this point)
 
 
-# ── thềm, tường, cửa, lan can, sân ──
+# ── porch, wall, door, railing, yard ──
 def box(name, size, loc, mat, c=C_ENV, rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc, rotation=rot)
     ob = bpy.context.active_object
@@ -500,20 +500,20 @@ def box(name, size, loc, mat, c=C_ENV, rot=(0, 0, 0)):
 
 
 FRONT_EDGE, WALL_Y = -0.62, 1.55
-# sàn hiên: một tấm phẳng, ván gỗ nằm trong texture (ván chạy ngang theo trục x)
+# porch floor: one flat plane, the boards live in the texture (boards run horizontally along x)
 box("floor", (4.0, WALL_Y - FRONT_EDGE, 0.035), (0.6, (WALL_Y + FRONT_EDGE) / 2, -0.0175), M_FLOOR)
 box("joist", (4.2, 0.03, 0.2), (0.6, FRONT_EDGE + 0.01, -0.13), M_STEP)
-# bậc thứ hai
+# second step
 box("step2", (4.0, 0.32, 0.04), (0.6, FRONT_EDGE - 0.15, -0.21), M_STEP)
 box("step2_riser", (4.0, 0.02, 0.2), (0.6, FRONT_EDGE - 0.31, -0.32), M_STEP)
-# sân đất phía dưới và phía trái
+# dirt yard below and to the left
 box("yard", (60, 60, 0.1), (0, 20, -0.48), M_DIRT)
 
-# tường nhà bên phải: ván gỗ ốp ngang, từ x = -0.30 trở sang phải
+# house wall on the right: horizontal wooden siding, from x = -0.30 to the right
 WALL_X0 = -0.30
 box("wall", (3.4, 0.05, 3.4), (WALL_X0 + 1.7, WALL_Y + 0.025, 1.7), M_SIDING)
 box("corner_post", (0.11, 0.11, 3.4), (WALL_X0, WALL_Y - 0.03, 1.7), M_TRIM)
-# cửa ra vào: khung trắng ngà, cánh gỗ tối có ô panel
+# front door: ivory frame, dark wooden leaf with panels
 DX0, DX1, DZ = 0.42, 1.30, 2.05
 box("door", (DX1 - DX0, 0.04, DZ), ((DX0 + DX1) / 2, WALL_Y - 0.01, DZ / 2), M_DOOR)
 for side in (DX0 - 0.05, DX1 + 0.05):
@@ -526,7 +526,7 @@ for (u0, u1, v0, v1) in ((0.12, 0.45, 0.08, 0.42), (0.55, 0.88, 0.08, 0.42), (0.
 box("knob", (0.035, 0.04, 0.035), (DX0 + 0.08, WALL_Y - 0.06, 0.98), M_TIN)
 box("doormat", (0.7, 0.42, 0.012), ((DX0 + DX1) / 2, WALL_Y - 0.3, 0.006), mat_simple("mat", "#3f2a1a", 0.95))
 
-# lan can bên trái (nối từ cột góc ra), sau lan can là sân mở ra bầu trời
+# railing on the left (running from the corner post), open yard and sky behind it
 RAIL_Y = WALL_Y - 0.03
 box("rail_top", (2.2, 0.07, 0.05), (WALL_X0 - 1.1, RAIL_Y, 0.86), M_TRIM)
 box("rail_bot", (2.2, 0.05, 0.04), (WALL_X0 - 1.1, RAIL_Y, 0.08), M_TRIM)
@@ -536,7 +536,7 @@ while x > WALL_X0 - 2.2:
     x -= 0.12
 box("porch_post_far", (0.1, 0.1, 3.0), (WALL_X0 - 2.2, RAIL_Y, 1.5), M_TRIM)
 
-# đèn hiên: hộp đèn lồng kim loại treo trên tường, kính phát sáng
+# porch lamp: metal lantern box hung on the wall, glowing glass
 LANTERN = Vector((WALL_X0 + 0.22, WALL_Y - 0.12, 1.32))
 box("lantern_arm", (0.03, 0.12, 0.03), LANTERN + Vector((0, 0.07, 0.16)), M_IRON)
 box("lantern_back", (0.1, 0.02, 0.22), LANTERN + Vector((0, 0.11, 0.03)), M_IRON)
@@ -547,7 +547,7 @@ for sx in (-1, 1):
     for sy in (-1, 1):
         box(f"lantern_bar{sx}{sy}", (0.012, 0.012, 0.22), LANTERN + Vector((sx * 0.057, sy * 0.057, 0.015)), M_IRON)
 
-# phông trời: mặt phẳng lớn ở xa, ảnh vẽ tay (trăng, mây, hàng cây) chiếu đúng khung camera
+# sky backdrop: large distant plane, hand-painted image (moon, clouds, tree line) projected to fit the camera frame
 SKY_D = 30.0
 sky_img = img("sky.jpg")
 skym = bpy.data.materials.new("sky")
@@ -574,18 +574,18 @@ cam_d.sensor_fit = "HORIZONTAL"
 cam_d.sensor_width = 36
 cam = obj("cam", cam_d, sc.collection)
 cam.location = CAM_LOC
-# nhìn vào điểm hơi cao hơn tâm bí để quả bí nằm ở 1/3 dưới khung
+# aim slightly above the pumpkin centre so the pumpkin sits in the lower third of the frame
 aim = PC + Vector((0, 0, 0.22))
 cam.rotation_euler = (aim - CAM_LOC).to_track_quat("-Z", "Y").to_euler()
 sc.camera = cam
 sc.render.resolution_x, sc.render.resolution_y = 1320, 2868      # iPhone 17 Pro Max: 440×956 pt @3x
 
-# phông trời đặt vuông góc trục nhìn, phủ kín khung (ảnh dọc 2:3 hay 9:16 đều được, cắt theo chiều ngang)
+# sky backdrop perpendicular to the view axis, covering the whole frame (2:3 or 9:16 portrait image both work, cropped horizontally)
 bpy.context.view_layer.update()
 fwd = cam.matrix_world.to_quaternion() @ Vector((0, 0, -1))
 fwd_h = Vector((fwd.x, fwd.y, 0)).normalized()
-# khung nhìn ở khoảng cách SKY_D: rộng 2·fw, cao 2·fh (m). Ảnh trời rộng 13 m (trăng ≈ 1/5 bề ngang khung),
-# mép trên trùng mép trên khung, mép trái lệch ra ngoài khung 1 m → trăng nằm ở góc trên trái, hàng cây khuất sau lan can
+# view frustum at distance SKY_D: 2·fw wide, 2·fh tall (m). The sky image is 13 m wide (moon ≈ 1/5 of the frame width),
+# top edge aligned with the frame's top edge, left edge 1 m outside the frame → moon in the top-left corner, tree line hidden behind the railing
 fw = SKY_D * 18 / CAM_LENS
 fh = fw * sc.render.resolution_y / sc.render.resolution_x
 aspect = (sky_img.size[1] / sky_img.size[0]) if sky_img and sky_img.size[0] else 1.6
@@ -593,7 +593,7 @@ sw = 13.0
 sh = sw * aspect
 right = fwd_h.cross(Vector((0, 0, 1))).normalized()
 up = right.cross(fwd).normalized()
-top_c = CAM_LOC + fwd * SKY_D + up * fh          # điểm giữa mép trên khung
+top_c = CAM_LOC + fwd * SKY_D + up * fh          # midpoint of the frame's top edge
 me = bpy.data.meshes.new("sky")
 x0 = -fw - 1.0
 corners = [(x0, -sh), (x0 + sw, -sh), (x0 + sw, 0.5), (x0, 0.5)]
@@ -607,7 +607,7 @@ sky.visible_shadow = False
 sky.visible_diffuse = False
 sky.visible_glossy = False
 
-# ── đèn ──
+# ── lights ──
 def light(name, kind, energy, color, loc, **kw):
     ld = bpy.data.lights.new(name, kind)
     ld.energy = energy
@@ -619,7 +619,7 @@ def light(name, kind, energy, color, loc, **kw):
     return ob
 
 
-MOON_DIR = Vector((-0.45, 1.0, 0.55)).normalized()      # trăng phía sau bên trái, trên cao
+MOON_DIR = Vector((-0.45, 1.0, 0.55)).normalized()      # moon behind, to the left, high up
 moon = light("moon", "SUN", 0.7, "#c9d8ff", (0, 0, 5), angle=rad(1.5))
 moon.rotation_euler = (-MOON_DIR).to_track_quat("-Z", "Y").to_euler()
 fill = light("moon_fill", "AREA", 4.0, "#7d8fc4", (0.4, -1.6, 1.4), size=2.5)
@@ -628,12 +628,12 @@ porch = light("porch", "POINT", 45.0, "#ffbe74", LANTERN + Vector((0, -0.01, 0.0
 porch_key = light("porch_key", "AREA", 6.0, "#ffb866", (-0.55, -0.35, 0.9), size=0.4)
 porch_key.rotation_euler = (PC + Vector((0, 0, 0.05)) - porch_key.location).to_track_quat("-Z", "Y").to_euler()
 candle = light("candle", "POINT", 1.2, "#ff9a3c", FLAME, shadow_soft_size=0.006)
-# ánh nến lên cảnh (pass bg_glow): nguồn điểm ở tâm lòng bí, vỏ/lòng bí ẩn hẳn → chỉ còn suy giảm hình học + bóng của
-# vật khác; app tự nhân với tầm nhìn xuyên lỗ khắc (giải tích)
+# candlelight on the scene (bg_glow pass): point source at the centre of the pumpkin interior, skin/interior fully hidden → only geometric falloff + shadows of
+# other objects remain; the app multiplies by the visibility through the carved holes itself (analytically)
 GLOW_SRC = PC + Vector((0, 0.0, 0.02))
 glow = light("candle_glow", "POINT", 3.0, "#ff9a3c", GLOW_SRC, shadow_soft_size=0.05)
 
-# world: ánh trời đêm rất nhẹ
+# world: very faint night-sky light
 w = bpy.data.worlds.new("night")
 sc.world = w
 w.use_nodes = True
@@ -663,17 +663,17 @@ sc.view_settings.view_transform = "AgX" if "AgX" in [i.identifier for i in bpy.t
 sc.view_settings.look = "None"
 sc.view_settings.exposure = 0.6
 
-# meta cho render_passes.py / layout.json
+# meta for render_passes.py / layout.json
 sc["pc_flame"] = list(FLAME)
 sc["pc_center"] = list(PC)
 sc["pc_radius"] = [R, R, R * HZ]
 sc["pc_lantern"] = list(LANTERN)
 sc["pc_glow_src"] = list(GLOW_SRC)
-sc["pc_shell"] = SHELL * R        # độ dày vỏ (m) ở xích đạo: thành trong = vỏ ngoài thu nhỏ (1 − SHELL) quanh tâm bí
+sc["pc_shell"] = SHELL * R        # skin thickness (m) at the equator: inner wall = outer skin scaled by (1 − SHELL) around the pumpkin centre
 
-# chi tiết bổ sung (lá rụng, đèn lồng cổ, bí nhỏ, thảm, mạng nhện, dây leo…): mỗi file trong extras/ chạy ở đây,
-# dùng chung globals của script này, chỉ thêm object vào `env` / `lights`.
-# PC_EXTRAS=0 để tắt hết, PC_EXTRAS=porch_details.py:x.py để chỉ chạy vài file.
+# extra details (fallen leaves, old lantern, small pumpkins, mat, cobwebs, vines…): each file in extras/ runs here,
+# sharing this script's globals, only adding objects to `env` / `lights`.
+# PC_EXTRAS=0 disables them all, PC_EXTRAS=porch_details.py:x.py runs only a few files.
 _extras = os.environ.get("PC_EXTRAS", "")
 _xdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extras")
 if _extras != "0":

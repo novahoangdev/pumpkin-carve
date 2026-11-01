@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Dò khung nến bùng trong bản quay: đọc "t y" (giây, độ sáng trung bình) từ stdin, in "t điểm".
-Nến bùng = độ sáng tăng vọt rồi GIỮ sáng (đèn hiên đã tắt nhưng nến cháy tiếp); tia sét cũng loé mạnh
-nhưng tắt trong < 1 s, nên chấm điểm CHỈ bằng mức tăng nhỏ nhất trong 0,6–1,4 s sau khung so với trung bình 0,3 s
-trước nó (không cộng bước nhảy một khung: sét loé 1 khung +70 từng thắng nến bùng ở v4d)."""
+"""Find the candle-burst frame in a recording: reads "t y" (seconds, mean brightness) from stdin, prints "t score".
+Candle burst = brightness jumps and STAYS bright (porch light is off but the candle keeps burning); lightning also flashes hard
+but dies within < 1 s, so score ONLY by the smallest rise over 0.6–1.4 s after the frame versus the mean of the 0.3 s
+before it (no single-frame jump term: a 1-frame +70 lightning flash once beat the candle burst in v4d)."""
 import sys
 t0 = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0
 rows = [tuple(map(float, l.split())) for l in sys.stdin if l.strip()]
