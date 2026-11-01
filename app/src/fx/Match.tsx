@@ -8,27 +8,27 @@ import { useGpuImage } from "../perf/gpu";
 export const MATCH_REST = { x: 352, y: 800 };
 export const MATCH_LEN = 74;
 
-const ROT = -0.6; // thân diêm nghiêng (rad)
-// que diêm nằm trên thềm (m): đầu và đuôi que ở chỗ nằm yên, chiếu từ ảnh gốc xuống mặt sàn
+const ROT = -0.6; // match stick tilt (rad)
+// the match lies on the porch (m): head and tail at the resting spot, projected from the original image onto the floor
 const REST_HEAD = baseToFloor(MATCH_REST.x, MATCH_REST.y, 0.002);
 const REST_TAIL = baseToFloor(MATCH_REST.x - Math.sin(ROT) * MATCH_LEN, MATCH_REST.y + Math.cos(ROT) * MATCH_LEN, 0.002);
 const SHEET = require("../../assets/fx/pfx_match.png");
-// pfx_match.png, 4 px/pt, nướng trong Blender:
-//   que diêm 48×348 (x −6..6, y −8..79 pt quanh tâm đầu diêm): gỗ bạch dương có thớ, thân vuông vát cạnh xoay
-//   nhẹ để thấy mặt sáng/mặt tối + cạnh bắt sáng, đầu diêm thuốc đỏ sần | đầu diêm đang cháy (than đen,
-//   vết nứt đỏ rực, thân sém) 48×80 | cụm khói mềm 32 | lấp lánh 32
-const PX = 0.25; // pt mỗi px sheet
+// pfx_match.png, 4 px/pt, baked in Blender:
+//   match stick 48×348 (x −6..6, y −8..79 pt around the match head center): grained birch wood, square beveled stick rotated
+//   slightly to show a lit side/dark side + highlight edge, bumpy red head | burning head (black char,
+//   glowing red cracks, scorched stick) 48×80 | soft smoke puff 32 | sparkle 32
+const PX = 0.25; // pt per sheet px
 const STICK_SPRITES = [Skia.XYWHRect(0, 0, 48, 348), Skia.XYWHRect(48, 0, 48, 80)];
 const STICK_XF = [Skia.RSXform(PX, 0, -6, -8), Skia.RSXform(PX, 0, -6, -8)];
-// chấm lấp lánh trên hạt thuốc đầu diêm (phía trên-trái, nơi bắt đèn hiên)
+// sparkle dots on the match head grains (upper-left, where it catches the porch light)
 const GLINT_SPRITES = [Skia.XYWHRect(96, 32, 32, 32)];
 const GLINT_XF = [Skia.RSXform(0.13, 0, -1.9 - 16 * 0.13, -3.2 - 16 * 0.13)];
 const SPR_SMOKE = [96, 0, 32, 32];
 const SMOKE_N = 40;
-const SMOKE_EMIT = 0.9; // s khói còn nhả ra sau khi tắt
+const SMOKE_EMIT = 0.9; // s smoke keeps coming out after it goes out
 const SMOKE_LIFE = 2.6;
 
-// bóng que diêm nằm trên thềm (đầu ở gốc, thân chạy xuống như sprite)
+// shadow of the match lying on the porch (head at the origin, stick running down like the sprite)
 const SHADOW = (() => {
   const b = Skia.PathBuilder.Make();
   b.addRRect(Skia.RRectXY(Skia.XYWHRect(-2.3, 0, 4.6, 79), 1.2, 1.2));
@@ -37,16 +37,16 @@ const SHADOW = (() => {
 })();
 
 /**
- * Ngọn lửa diêm (vẽ cộng sáng, toạ độ pt quanh tâm đầu diêm, y xuống):
- * dáng giọt nước (tròn ở đáy, nhọn ở đỉnh), đáy xanh lam mờ ôm đầu diêm, thân vàng, lõi trắng nóng,
- * đỉnh ngả cam; mép gợn cuộn lên theo noise, chiều cao chập chờn; đỉnh lửa bị kéo ngược hướng que diêm đang
- * di chuyển (`lean`) và dài ra / co lại theo vận tốc dọc (`stretch`). Kèm quầng sáng mềm quanh thân lửa.
+ * Match flame (drawn additively, pt coordinates around the match head center, y down):
+ * teardrop shape (round at the base, pointed at the tip), faint blue base hugging the head, yellow body, white-hot core,
+ * orange-tinged tip; edges ripple upward via noise, height flickers; the flame tip is dragged opposite the direction the match is
+ * moving (`lean`) and lengthens / shortens with vertical velocity (`stretch`). Plus a soft glow around the flame body.
  */
 const flameFx = Skia.RuntimeEffect.Make(`
 uniform float t;
-uniform float k;        // cường độ 0..1 (burn × chập chờn)
-uniform float lean;     // đỉnh lửa lệch ngang, theo tỉ lệ chiều cao (+ = sang phải)
-uniform float stretch;  // > 1: dài + mảnh, < 1: lùn + bè
+uniform float k;        // intensity 0..1 (burn × flicker)
+uniform float lean;     // horizontal tip offset, as a fraction of the height (+ = to the right)
+uniform float stretch;  // > 1: long + thin, < 1: short + wide
 
 float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
 float noise(float2 p) {
@@ -56,30 +56,30 @@ float noise(float2 p) {
 
 half4 main(float2 p) {
   if (k < 0.01) return half4(0);
-  float H = 22.0 * (0.35 + 0.65 * k) * stretch;      // chiều cao thân lửa (pt)
-  float R = 4.2 * (0.5 + 0.5 * k) / sqrt(stretch);    // độ bè
-  float y0 = 3.5;                                     // đáy lửa ôm phía dưới đầu diêm
-  float u = (y0 - p.y) / H;                           // 0 đáy → 1 đỉnh
+  float H = 22.0 * (0.35 + 0.65 * k) * stretch;      // flame body height (pt)
+  float R = 4.2 * (0.5 + 0.5 * k) / sqrt(stretch);    // width
+  float y0 = 3.5;                                     // flame base wraps the bottom of the match head
+  float u = (y0 - p.y) / H;                           // 0 base → 1 tip
   float uu = clamp(u, 0.0, 1.0);
-  // thân lửa uốn theo độ nghiêng (đỉnh lệch nhiều, đáy bám đầu diêm) + gợn cuộn lên
+  // flame body bends with the lean (tip shifts a lot, base sticks to the head) + upward ripples
   float n1 = noise(float2(p.x * 0.30, p.y * 0.20 + t * 7.0));
   float n2 = noise(float2(p.x * 0.70 + 5.0, p.y * 0.45 + t * 13.0));
   float cx = lean * H * uu * uu + (n1 - 0.5) * 2.6 * uu * uu + (n2 - 0.5) * 0.9 * uu;
   float x = p.x - cx;
-  float hf = 0.86 + 0.28 * noise(float2(t * 5.0, 1.7));  // đỉnh lửa phập phồng
+  float hf = 0.86 + 0.28 * noise(float2(t * 5.0, 1.7));  // flame tip pulsing
   float v = u / hf;
-  // dáng giọt nước
+  // teardrop shape
   float w = R * 2.6 * sqrt(max(v, 0.0)) * pow(max(1.0 - v, 0.0), 0.9);
   float e = abs(x) / max(w, 0.001);
   float inside = step(0.0, v) * step(v, 1.0);
   float body = inside * smoothstep(1.0, 0.45, e) * smoothstep(1.0, 0.72, v);
-  // vùng phát sáng vàng bắt đầu cao hơn đáy một chút; đáy là lửa xanh mờ
+  // the yellow emissive zone starts a bit above the base; the base is faint blue flame
   float yellow = body * smoothstep(0.05, 0.24, v);
   float core = body * smoothstep(0.62, 0.0, e) * smoothstep(0.1, 0.26, v) * smoothstep(0.78, 0.36, v);
   float blue = inside * smoothstep(1.2, 0.55, e) * smoothstep(0.34, 0.08, v) * smoothstep(0.0, 0.06, v);
   float3 bodyC = mix(float3(1.0, 0.80, 0.40), float3(1.0, 0.46, 0.12), smoothstep(0.3, 0.95, v));
   float3 rgb = yellow * bodyC + core * float3(1.0, 0.97, 0.88) * 0.95 + blue * float3(0.20, 0.36, 1.0) * 0.6;
-  // quầng sáng mềm quanh thân lửa
+  // soft glow around the flame body
   float dx = x / (R * 2.6);
   float dy = (p.y - (y0 - H * 0.42)) / (H * 0.9);
   rgb += exp(-(dx * dx + dy * dy) * 2.2) * float3(1.0, 0.58, 0.22) * 0.22;
@@ -96,12 +96,12 @@ const hash = (n: number) => {
 };
 
 /**
- * Que diêm: (x, y) là đầu diêm. Cầm lên thì đầu diêm bùng lửa (`burn` 0..1), thân nghiêng 35°.
- * Thả vào miệng bí thì thắp nến; que diêm mờ đi (`fade`).
+ * Match: (x, y) is the match head. Picking it up makes the head burst into flame (`burn` 0..1), stick tilted 35°.
+ * Dropping it into the pumpkin mouth lights the candle; the match fades out (`fade`).
  *
- * Que diêm gỗ thật (sprite Blender) + bóng mềm khi nằm trên thềm; lúc cháy đầu diêm thành than có vết nứt
- * đỏ rực. Lửa vẽ bằng shader (xem `flameFx`), luôn hướng lên trên, nghiêng ngược hướng di chuyển với độ trễ
- * kiểu lò xo; quầng sáng ấm cộng lên thân diêm và xung quanh. Lửa tắt thì một sợi khói mảnh cuộn lên từ chỗ tắt.
+ * A real wooden match (Blender sprite) + soft shadow while lying on the porch; when burning the head turns to char with glowing
+ * red cracks. The flame is a shader (see `flameFx`), always pointing up, leaning opposite the motion with spring-like
+ * lag; a warm glow is added over the stick and around it. When the flame goes out a thin wisp of smoke curls up from that spot.
  */
 export function Match({
   x,
@@ -120,13 +120,13 @@ export function Match({
 }) {
   const sheet = useGpuImage(SHEET, { mipmapped: true });
 
-  // ── vận tốc que diêm → lửa nghiêng (lò xo) + dãn; chốt thời điểm/vị trí lửa tắt cho sợi khói ──
+  // ── match velocity → flame lean (spring) + stretch; latch the time/position where the flame went out for the smoke wisp ──
   const motion = useSharedValue({ t: -1, x: 0, y: 0, vx: 0, vy: 0 });
   const lean = useSharedValue(0);
   const leanV = useSharedValue(0);
   const stretch = useSharedValue(1);
   const burning = useSharedValue(false);
-  const smoke = useSharedValue({ t: -1, x: 0, y: 0, z: 0 }); // nơi lửa tắt (m, trên mặt quả bí)
+  const smoke = useSharedValue({ t: -1, x: 0, y: 0, z: 0 }); // where the flame went out (m, on the pumpkin surface)
   useAnimatedReaction(
     () => time.value,
     (t) => {
@@ -152,7 +152,7 @@ export function Match({
       if (b > 0.6) burning.set(true);
       else if (b < 0.35 && burning.value) {
         burning.set(false);
-        // lửa tắt trong miệng bí: neo điểm đó vào không gian cảnh (nhích ra trước mặt vỏ 1 cm) để khói đứng đúng chỗ khi camera nghiêng
+        // flame went out in the pumpkin mouth: anchor that point in scene space (1 cm in front of the rind) so the smoke stays put when the camera tilts
         const bb = basis ? basis.value : BASE_BASIS;
         const w = screenToPumpkinWorld(bb, X, Y);
         smoke.set({ t, x: w[0], y: w[1] - 0.01, z: w[2] });
@@ -160,8 +160,8 @@ export function Match({
     },
   );
 
-  // que diêm nằm trên thềm thuộc không gian cảnh: nhìn quanh / nghiêng / zoom thì nó nằm yên trên ván sàn (đúng vị trí, góc, cỡ);
-  // cầm lên thì theo ngón tay (độ lệch so với chỗ nằm), xa chỗ nằm thì về cỡ/góc của màn hình.
+  // the match lying on the porch lives in scene space: looking around / tilting / zooming it stays put on the floor boards (correct position, angle, size);
+  // once picked up it follows the finger (offset from the resting spot), and far from the resting spot it goes to screen size/angle.
   const place = useDerivedValue(() => {
     const b = basis ? basis.value : BASE_BASIS;
     const H = [0, 0, 0, 0];
@@ -191,7 +191,7 @@ export function Match({
     const t = time.value;
     return burn.value * (0.9 + 0.07 * Math.sin(t * 31) + 0.05 * Math.sin(t * 17.3) + 0.04 * Math.sin(t * 53.1));
   });
-  // bóng que diêm: chỉ khi đang nằm ở chỗ cũ trên thềm (nhấc lên thì tan)
+  // match shadow: only while lying at its original spot on the porch (fades when picked up)
   const shadowT = useDerivedValue(() => {
     const p = place.value;
     return [{ translateX: p.x + 2.2 * p.s }, { translateY: p.y + 2.8 * p.s }, { rotate: p.rot }, { scale: p.s }];
@@ -201,7 +201,7 @@ export function Match({
     return 0.45 * Math.max(0, 1 - d / 16) * (1 - fade.value);
   });
 
-  // màu nhân cho que diêm: [que nguyên vẹn, lớp than phủ đầu diêm theo burn]
+  // tint colors for the match: [intact stick, char layer over the head by burn]
   const stickC = useColorBuffer(2, (v, i) => {
     "worklet";
     v[0] = 1;
@@ -222,7 +222,7 @@ export function Match({
   const glowNear = useDerivedValue(() => 22 * Math.max(0.01, flick.value));
   const glowFar = useDerivedValue(() => 0.2 * flick.value);
 
-  // ── sợi khói: nhả trong SMOKE_EMIT giây từ chỗ lửa tắt, bay lên chậm dần, cuộn xoắn rộng dần rồi tan ──
+  // ── smoke wisp: emitted for SMOKE_EMIT seconds from where the flame went out, rises slowing down, curls wider then dissipates ──
   const smokeD = useDerivedValue(() => {
     const S = smoke.value;
     if (S.t < 0) return NONE;
@@ -233,7 +233,7 @@ export function Match({
     const out: number[] = [];
     const ph = hash(S.t) * 6.28;
     const drift = hash(S.t + 1.7) < 0.5 ? -1 : 1;
-    const M = 1 / 780; // m mỗi pt ở độ sâu quả bí (giữ nhịp/cỡ của bản trước)
+    const M = 1 / 780; // m per pt at the pumpkin depth (keeps the pace/size of the previous version)
     for (let j = 0; j < SMOKE_N; j++) {
       const te = (j / SMOKE_N) * SMOKE_EMIT;
       const a = st - te;
@@ -265,11 +265,11 @@ export function Match({
         <Atlas image={sheet} sprites={GLINT_SPRITES} transforms={GLINT_XF} colors={glintC} colorBlendMode="modulate" blendMode="plus" sampling={SAMPLING} />
       </Group>
       <Group transform={flameT}>
-        {/* quầng ấm rộng hắt ra xung quanh */}
+        {/* wide warm glow spilling around */}
         <Circle cx={0} cy={-8} r={70} blendMode="plus" opacity={glowFar}>
           <RadialGradient c={vec(0, -8)} r={70} colors={["#ff9a3c", "#ff8a2a55", "#ff7a1a00"]} />
         </Circle>
-        {/* quầng gần: hắt sáng lên đầu và thân diêm */}
+        {/* near glow: lights up the match head and stick */}
         <Circle cx={0} cy={-5} r={glowNear} blendMode="plus">
           <RadialGradient c={vec(0, -5)} r={glowNear} colors={["#ffb86a80", "#ffa04c4a", "#ff8a3020", "#ff6a1a08", "#ff6a0000"]} />
         </Circle>

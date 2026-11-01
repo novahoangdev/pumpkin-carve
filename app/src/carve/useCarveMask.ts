@@ -6,9 +6,9 @@ import { toGpu } from "../perf/gpu";
 export type MaskImages = { mask: SkImage; blur: SkImage };
 
 /**
- * Vẽ toàn bộ lỗ khắc vào một surface raster (CPU, MASK×MASK phủ khung crop): nền đen, lỗ trắng.
- * Kèm bản blur (quầng sáng, vỏ trong mờ, bóng in trên thềm). Chỉ vẽ lại khi danh sách lỗ đổi
- * (nhấc tay, undo, reset), nên chạy trên JS thread là đủ nhanh.
+ * Draws all carved holes into a raster surface (CPU, MASK×MASK covering the crop frame): black background, white holes.
+ * Plus a blurred copy (glow, translucent rind, shadow cast on the porch). Only redrawn when the hole list changes
+ * (finger lift, undo, reset), so running on the JS thread is fast enough.
  */
 const renderMask = (holes: SkPath[]): MaskImages => {
   const s = Skia.Surface.MakeRaster(MASK, MASK)!;

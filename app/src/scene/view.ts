@@ -1,17 +1,17 @@
 import { CAM, CROP, PUMPKIN, VIEW } from "./layout";
 
-const NECK_UP = 0.1;   // mắt cao hơn khớp cổ (m)
-const NECK_FWD = 0.08; // mắt ở trước khớp cổ (m)
+const NECK_UP = 0.1;   // eyes sit above the neck joint (m)
+const NECK_FWD = 0.08; // eyes sit in front of the neck joint (m)
 
 /**
- * Camera xem: xoay (yaw, pitch), đổi tiêu cự (zoom) và DỊCH mắt vài cm như đầu người thật:
- *   - quay đầu: mắt nằm trước–trên khớp cổ nên xoay đầu là mắt dịch theo cung nhỏ (parallax tự nhiên khi nhìn quanh)
- *   - nghiêng máy: mắt đi vòng quanh quả bí (ox, oy) để thấy bí và lòng bí lệch đúng phối cảnh
- * Shader dựng lại ảnh bằng độ sâu (bg_depth): điểm màn hình → tia từ mắt → điểm thế giới → ảnh camera gốc / panorama.
- * Quả bí dùng ellipsoid giải tích làm độ sâu. Không dịch mắt thì đúng bằng homography của camera gốc.
+ * View camera: rotate (yaw, pitch), change focal length (zoom) and SHIFT the eye a few cm like a real head:
+ *   - turning the head: the eye sits in front of and above the neck joint, so turning moves it along a small arc (natural parallax when looking around)
+ *   - tilting the phone: the eye orbits the pumpkin (ox, oy) so the pumpkin and its interior shift with correct perspective
+ * The shader reconstructs the image from depth (bg_depth): screen point → ray from the eye → world point → original camera image / panorama.
+ * The pumpkin uses an analytic ellipsoid for depth. With no eye shift this is exactly the original camera's homography.
  */
 export type ViewState = { yaw: number; pitch: number; zoom: number; ox?: number; oy?: number };
-/** Trục camera xem trong hệ thế giới (x phải, y lên, z ngược hướng nhìn), tiêu cự (pt), vị trí mắt (m). */
+/** View camera axes in world space (x right, y up, z opposite the view direction), focal length (pt), eye position (m). */
 export type Basis = { x: number[]; y: number[]; z: number[]; f: number; e: number[] };
 
 const X0 = CAM.rot[0], Y0 = CAM.rot[1], Z0 = CAM.rot[2];
@@ -29,7 +29,7 @@ const dot = (a: number[], b: number[]) => {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 };
 
-// xoay vector v quanh trục đơn vị k một góc a (Rodrigues)
+// rotate vector v around unit axis k by angle a (Rodrigues)
 const rot = (v: number[], k: number[], a: number) => {
   "worklet";
   const c = Math.cos(a), s = Math.sin(a), kd = dot(k, v) * (1 - c);
@@ -40,7 +40,7 @@ const rot = (v: number[], k: number[], a: number) => {
   ];
 };
 
-/** yaw dương = nhìn sang phải (xoay quanh trục đứng thế giới), pitch dương = ngước lên (quanh trục ngang camera). */
+/** positive yaw = look right (around the world vertical axis), positive pitch = look up (around the camera horizontal axis). */
 export const viewBasis = (v: ViewState): Basis => {
   "worklet";
   const up = [0, 0, 1];
@@ -53,7 +53,7 @@ export const viewBasis = (v: ViewState): Basis => {
   return { x: x1, y: y2, z: z2, f: F0 * v.zoom, e };
 };
 
-/** Điểm màn hình (pt) → điểm trên ảnh camera gốc (pt); null nếu ở sau camera gốc. */
+/** Screen point (pt) → point on the original camera image (pt); null if behind the original camera. */
 export const screenToBase = (b: Basis, x: number, y: number): [number, number] | null => {
   "worklet";
   const sx = (x - CX) / b.f, sy = -(y - CY) / b.f;
@@ -63,7 +63,7 @@ export const screenToBase = (b: Basis, x: number, y: number): [number, number] |
   return [CX + (F0 * dot(X0, d)) / -cz, CY - (F0 * dot(Y0, d)) / -cz];
 };
 
-/** Điểm trên ảnh camera gốc (pt) → điểm màn hình (pt) của camera xem. */
+/** Point on the original camera image (pt) → screen point (pt) of the view camera. */
 export const baseToScreen = (b: Basis, x: number, y: number): [number, number] => {
   "worklet";
   const sx = (x - CX) / F0, sy = -(y - CY) / F0;
@@ -72,7 +72,7 @@ export const baseToScreen = (b: Basis, x: number, y: number): [number, number] =
   return [CX + (b.f * dot(b.x, d)) / -cz, CY - (b.f * dot(b.y, d)) / -cz];
 };
 
-/** Điểm thế giới (m) → ảnh camera gốc (pt). */
+/** World point (m) → original camera image (pt). */
 export const projectBase = (p: number[]) => {
   "worklet";
   const d = [p[0] - CAM.pos[0], p[1] - CAM.pos[1], p[2] - CAM.pos[2]];
@@ -80,13 +80,13 @@ export const projectBase = (p: number[]) => {
   return [CX + (F0 * dot(X0, d)) / -cz, CY - (F0 * dot(Y0, d)) / -cz] as const;
 };
 
-/** Đáy (điểm chạm thềm) và tâm quả bí trên ảnh camera gốc: tâm xoay/nén khi bí nhảy. */
+/** Pumpkin base (porch contact point) and center on the original camera image: pivot for rotation/squash when it jumps. */
 export const PUMPKIN_FOOT = projectBase([PUMPKIN.c[0], PUMPKIN.c[1] - PUMPKIN.r[1] * 0.35, 0]);
 export const PUMPKIN_MID = projectBase(PUMPKIN.c);
-/** Bề ngang quả bí trên ảnh gốc (pt), ~ 0.94 cạnh crop. */
+/** Pumpkin width on the original image (pt), ~ 0.94 of the crop side. */
 export const PUMPKIN_W = CROP.s * 0.94;
 
-/** Điểm thế giới (m) → màn hình (pt) của camera xem; z = độ sâu (m) theo hướng nhìn, ≤ 0 nếu ở sau camera. */
+/** World point (m) → view camera screen (pt); z = depth (m) along the view direction, ≤ 0 if behind the camera. */
 export const worldToScreen = (b: Basis, p: number[]): [number, number, number] => {
   "worklet";
   const d = [p[0] - b.e[0], p[1] - b.e[1], p[2] - b.e[2]];
@@ -97,8 +97,8 @@ export const worldToScreen = (b: Basis, p: number[]): [number, number, number] =
 
 const PC = PUMPKIN.c, PR = PUMPKIN.r;
 /**
- * Tia từ o theo hướng d chạm ellipsoid quả bí (mặt trước). Trượt ngoài thì lấy điểm gần tâm nhất theo metric ellipsoid
- * (đúng bằng điểm tiếp xúc ở viền nên liên tục): vùng cuống / viền vẫn có độ sâu hợp lý.
+ * Ray from o along d hits the pumpkin ellipsoid (front face). On a miss, take the point closest to the center in the ellipsoid metric
+ * (equal to the tangent point at the silhouette, so it is continuous): the stem / rim areas still get a sensible depth.
  */
 export const pumpkinHit = (o: number[], d: number[]) => {
   "worklet";
@@ -110,7 +110,7 @@ export const pumpkinHit = (o: number[], d: number[]) => {
   return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
 };
 
-/** Điểm màn hình → điểm trên ảnh gốc của quả bí (đứng yên) dưới ngón tay, có tính dịch mắt. */
+/** Screen point → point on the original image of the (static) pumpkin under the finger, accounting for eye shift. */
 export const screenToPumpkin = (b: Basis, x: number, y: number): [number, number] => {
   "worklet";
   const sx = (x - CX) / b.f, sy = -(y - CY) / b.f;
@@ -119,7 +119,7 @@ export const screenToPumpkin = (b: Basis, x: number, y: number): [number, number
   return [p[0], p[1]];
 };
 
-/** Điểm trên quả bí (pt ảnh gốc) → màn hình của camera xem (đúng parallax khi mắt dịch). */
+/** Point on the pumpkin (original image pt) → view camera screen (correct parallax when the eye shifts). */
 export const pumpkinToScreen = (b: Basis, px: number, py: number): [number, number] => {
   "worklet";
   const sx = (px - CX) / F0, sy = -(py - CY) / F0;
@@ -129,7 +129,7 @@ export const pumpkinToScreen = (b: Basis, px: number, py: number): [number, numb
 };
 
 /**
- * Biến đổi affine xấp xỉ quanh một điểm trên quả bí (lớp vẽ đè: vệt dao, mảnh vỏ, vụn): screen ≈ S + k·(p − P).
+ * Approximate affine transform around a point on the pumpkin (overlay layers: knife trail, rind piece, debris): screen ≈ S + k·(p − P).
  */
 export const localAffine = (b: Basis, px: number, py: number) => {
   "worklet";
@@ -139,7 +139,7 @@ export const localAffine = (b: Basis, px: number, py: number) => {
   return { sx, sy, k };
 };
 
-/** Như localAffine nhưng cho một điểm thế giới bất kỳ (vd. đáy quả bí trên thềm). */
+/** Like localAffine but for any world point (e.g. the pumpkin base on the porch). */
 export const worldAffine = (b: Basis, p: number[]) => {
   "worklet";
   const [sx, sy, z] = worldToScreen(b, p);
@@ -148,5 +148,5 @@ export const worldAffine = (b: Basis, p: number[]) => {
   return { sx, sy, k: b.f / Math.max(z, 1e-3) / (F0 / z0) };
 };
 
-/** Đáy quả bí trên thềm (m). */
+/** Pumpkin base on the porch (m). */
 export const PUMPKIN_FOOT_W = [PC[0], PC[1] - PR[1] * 0.35, 0];

@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 
 export type HapticKind = "select" | "light" | "medium" | "heavy" | "success" | "error";
 
-/** Gọi từ worklet qua scheduleOnRN. */
+/** Called from a worklet via scheduleOnRN. */
 export const fireHaptic = (kind: HapticKind) => {
   const p =
     kind === "select"

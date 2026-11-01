@@ -1,10 +1,10 @@
 import { PathOp, Skia, StrokeCap, StrokeJoin, type SkPath } from "react-native-skia";
 import { CENTER, CROP } from "../scene/layout";
 
-/** Danh sách điểm phẳng [x0, y0, x1, y1, …] (pt thiết kế). */
+/** Flat point list [x0, y0, x1, y1, …] (design pt). */
 export type Pts = number[];
 
-/** Path mượt qua các điểm: quadTo qua trung điểm (không vượt quá điểm như Catmull-Rom). */
+/** Smooth path through the points: quadTo via midpoints (no overshoot like Catmull-Rom). */
 export const smoothPath = (p: Pts, close = false): SkPath => {
   "worklet";
   const b = Skia.PathBuilder.Make();
@@ -27,7 +27,7 @@ export const pathLength = (p: Pts) => {
   return l;
 };
 
-/** Diện tích đa giác (shoelace), dùng để bỏ hình quá nhỏ. */
+/** Polygon area (shoelace), used to drop shapes that are too small. */
 const area = (p: Pts) => {
   let a = 0;
   for (let i = 0; i < p.length; i += 2) {
@@ -37,12 +37,12 @@ const area = (p: Pts) => {
   return Math.abs(a) / 2;
 };
 
-// vùng khắc được (xấp xỉ mặt trước quả bí): mảnh vỏ sụp bị cắt theo vùng này, shader thì dùng data.png chính xác
+// carvable area (approx. the front face of the pumpkin): the collapsing rind piece is clipped to it, the shader uses the exact data.png
 const FACE = Skia.Path.Oval({ x: CENTER.x - CROP.s * 0.36, y: CENTER.y - CROP.s * 0.3, width: CROP.s * 0.72, height: CROP.s * 0.56 });
 
 /**
- * Nét dao → lỗ khắc. Đầu–cuối gần nhau thì khép thành hình kín (fill), nét hở thành rãnh mảnh 5pt.
- * Trả null nếu nét quá ngắn / hình quá nhỏ.
+ * Knife stroke → carved hole. If start and end are close it closes into a filled shape, an open stroke becomes a thin 5pt groove.
+ * Returns null if the stroke is too short / the shape is too small.
  */
 export const strokeToHole = (p: Pts): { path: SkPath; closed: boolean } | null => {
   const n = p.length / 2;
