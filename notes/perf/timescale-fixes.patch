@@ -1,0 +1,64 @@
+--- a/app/src/scene/clock.ts	2026-10-31 17:15:52
++++ b/app/src/scene/clock.ts	2026-10-31 17:18:33
+@@ -11,9 +11,13 @@
+   return d / TIMESCALE;
+ };
+ 
+-/** Cấu hình spring theo đồng hồ demo: chậm lại TIMESCALE lần (k·s², c·s, cùng khối lượng) → cùng hình dạng chuyển động. */
++/**
++ * Cấu hình spring theo đồng hồ demo: chậm lại TIMESCALE lần (k·s², c·s, cùng khối lượng) → cùng hình dạng chuyển động.
++ * Mặc định phải là của Reanimated 4 (GentleSpringConfig: mass 4, damping 120, stiffness 900) — KHÔNG phải R3 (1/10/100):
++ * withSpring({ damping: 7, stiffness: 120 }) cũ chạy với mass 4.
++ */
+ export const spring = (c: { damping?: number; stiffness?: number; mass?: number } = {}) => {
+   "worklet";
+   const s = TIMESCALE;
+-  return { ...c, damping: (c.damping ?? 10) * s, stiffness: (c.stiffness ?? 100) * s * s, mass: c.mass ?? 1 };
++  return { ...c, damping: (c.damping ?? 120) * s, stiffness: (c.stiffness ?? 900) * s * s, mass: c.mass ?? 4 };
+ };
+--- a/app/src/fx/blowOut.ts	2026-10-31 17:15:34
++++ b/app/src/fx/blowOut.ts	2026-10-31 17:18:33
+@@ -13,6 +13,7 @@
+ } from "react-native-reanimated";
+ import { scheduleOnRN } from "react-native-worklets";
+ import { fireHaptic } from "./haptics";
++import { ms } from "../scene/clock";
+ 
+ /**
+  * Blow out the candle by blowing into the microphone.
+@@ -312,17 +313,17 @@
+     outAt.set(t);
+     hold.set(0);
+     // flame shrinks to nothing (shader also shrinks its height with `ember`)
+-    candle.set(withTiming(0, { duration: 240, easing: Easing.in(Easing.quad) }));
++    candle.set(withTiming(0, { duration: ms(240), easing: Easing.in(Easing.quad) }));
+     if (PORCH_BACK_MS >= 0)
+       porch.set(
+         withDelay(
+-          PORCH_BACK_MS,
++          ms(PORCH_BACK_MS),
+           withSequence(
+-            withTiming(0.55, { duration: 40 }),
+-            withTiming(0.05, { duration: 90 }),
+-            withTiming(0.8, { duration: 50 }),
+-            withTiming(0.25, { duration: 120 }),
+-            withTiming(1, { duration: 260 }),
++            withTiming(0.55, { duration: ms(40) }),
++            withTiming(0.05, { duration: ms(90) }),
++            withTiming(0.8, { duration: ms(50) }),
++            withTiming(0.25, { duration: ms(120) }),
++            withTiming(1, { duration: ms(260) }),
+           ),
+         ),
+       );
+--- a/app/src/fx/flameFollow.ts	2026-10-31 17:15:31
++++ b/app/src/fx/flameFollow.ts	2026-10-31 17:18:33
+@@ -57,7 +57,7 @@
+     "worklet";
+     const t = time.value;
+     const st = s.value;
+-    const dt = st.t < 0 ? 1 / 60 : clamp(t - st.t, 1 / 240, 1 / 20);
++    const dt = st.t < 0 ? 1 / 60 : clamp(t - st.t, 1 / 2000, 1 / 20);
+     const lit = clamp((candle.value - 0.25) / 0.5, 0, 1);
+     const f = finger.value;
+     const b = basis.value;

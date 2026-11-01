@@ -1,0 +1,151 @@
+--- a/app/src/scene/PumpkinScene.tsx	2026-10-31 15:52:00
++++ b/app/src/scene/PumpkinScene.tsx	2026-10-31 16:00:17
+@@ -10,7 +10,6 @@
+   Path,
+   Shader,
+   drawAsImage,
+-  useImage,
+   type SkImage,
+   type SkPath,
+ } from "react-native-skia";
+@@ -57,6 +56,7 @@
+ } from "./view";
+ import { smoothPath, strokeToHole, type Pts } from "../carve/stroke";
+ import { useCarveMask } from "../carve/useCarveMask";
++import { toGpu, useGpuImage } from "../perf/gpu";
+ import { PoppedPiece } from "../carve/PoppedPiece";
+ import { Match, MATCH_REST } from "../fx/Match";
+ import { Bats } from "../fx/Bats";
+@@ -77,6 +77,8 @@
+ const D0 = -[0, 1, 2].reduce((a, i) => a + CAM.rot[2][i] * (PUMPKIN.c[i] - CAM.pos[i]), 0);
+ const D2R = Math.PI / 180;
+ const LIGHT_K = 1; // độ phân giải bản đồ ánh nến (px / pt ảnh gốc)
++/** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */
++const ATMOS_DOWN = 3;
+ const clamp = (v: number, a: number, b: number) => {
+   "worklet";
+   return Math.max(a, Math.min(b, v));
+@@ -118,22 +120,22 @@
+ };
+ 
+ export function PumpkinScene() {
+-  const bgLit = useImage(sceneAssets.bgLit);
+-  const bgDark = useImage(sceneAssets.bgDark);
+-  const bgGlow = useImage(sceneAssets.bgGlow);
+-  const panoLit = useImage(sceneAssets.panoLit);
+-  const panoDark = useImage(sceneAssets.panoDark);
+-  const panoGlow = useImage(sceneAssets.panoGlow);
+-  const shadowLit = useImage(sceneAssets.shadowLit);
+-  const shadowDark = useImage(sceneAssets.shadowDark);
+-  const skinLit = useImage(sceneAssets.skinLit);
+-  const skinDark = useImage(sceneAssets.skinDark);
+-  const inLit = useImage(sceneAssets.inLit);
+-  const inUnlit = useImage(sceneAssets.inUnlit);
+-  const data = useImage(sceneAssets.data);
+-  const flesh = useImage(sceneAssets.flesh);
+-  const depthB = useImage(sceneAssets.depthB);
+-  const depthP = useImage(sceneAssets.depthP);
++  const bgLit = useGpuImage(sceneAssets.bgLit);
++  const bgDark = useGpuImage(sceneAssets.bgDark);
++  const bgGlow = useGpuImage(sceneAssets.bgGlow);
++  const panoLit = useGpuImage(sceneAssets.panoLit);
++  const panoDark = useGpuImage(sceneAssets.panoDark);
++  const panoGlow = useGpuImage(sceneAssets.panoGlow);
++  const shadowLit = useGpuImage(sceneAssets.shadowLit);
++  const shadowDark = useGpuImage(sceneAssets.shadowDark);
++  const skinLit = useGpuImage(sceneAssets.skinLit);
++  const skinDark = useGpuImage(sceneAssets.skinDark);
++  const inLit = useGpuImage(sceneAssets.inLit);
++  const inUnlit = useGpuImage(sceneAssets.inUnlit);
++  const data = useGpuImage(sceneAssets.data);
++  const flesh = useGpuImage(sceneAssets.flesh);
++  const depthB = useGpuImage(sceneAssets.depthB);
++  const depthP = useGpuImage(sceneAssets.depthP);
+ 
+   const carve = useCarveMask();
+   // bản đồ ánh nến lọt qua lỗ khắc: tính lại (GPU, offscreen) mỗi khi mask khắc đổi
+@@ -167,7 +169,7 @@
+         </Shader>
+       </Fill>,
+       { width: W, height: H },
+-    ).then((img) => live && setLightMap(img));
++    ).then((img) => live && setLightMap(toGpu(img)));
+     return () => {
+       live = false;
+     };
+@@ -180,6 +182,7 @@
+   const [lit, setLit] = useState(false);
+   const fit = useSharedValue<Fit>({ k: 1, ox: 0, oy: 0 });
+   const [fitState, setFitState] = useState<Fit>({ k: 1, ox: 0, oy: 0 });
++  const [size, setSize] = useState({ w: 0, h: 0 });
+ 
+   // ── đồng hồ + trạng thái ánh sáng ──
+   const time = useSharedValue(0);
+@@ -706,6 +709,11 @@
+     const sx = Math.sin(t * 61) * shake, sy = Math.cos(t * 53) * shake;
+     return [{ translateX: f.ox + sx }, { translateY: f.oy + sy }, { scale: f.k }];
+   });
++  // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
++  const fitTransformLow = useDerivedValue(() => {
++    const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
++    return [{ translateX: t[0].translateX! / ATMOS_DOWN }, { translateY: t[1].translateY! / ATMOS_DOWN }, { scale: t[2].scale! / ATMOS_DOWN }];
++  });
+   // lớp vẽ đè gắn với quả bí (vệt dao, mảnh vỏ, vụn, dơi): affine xấp xỉ ảnh gốc → màn hình
+   const pumpkinTransform = useDerivedValue(() => {
+     const a = localAffine(basis.value, PUMPKIN_MID[0], PUMPKIN_MID[1]);
+@@ -741,6 +749,7 @@
+     const f = fitView(width, height);
+     fit.set(f);
+     setFitState(f);
++    setSize({ w: width, h: height });
+   };
+ 
+   return (
+@@ -809,12 +818,32 @@
+                 </Shader>
+               </Fill>
+               <Match x={mx} y={my} burn={burn} fade={matchFade} time={time} />
++            </Group>
++          )}
++        </Canvas>
++      </GestureDetector>
++      {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
++      {ready && size.w > 0 && (
++        <View
++          pointerEvents="none"
++          style={{ position: "absolute", left: 0, top: 0, width: size.w / ATMOS_DOWN, height: size.h / ATMOS_DOWN, transformOrigin: "0 0", transform: [{ scale: ATMOS_DOWN }] }}
++        >
++          <Canvas style={StyleSheet.absoluteFill}>
++            <Group transform={fitTransformLow}>
+               <Fill>
+                 <Shader source={atmos} uniforms={aU}>
+                   <ImageShader image={carve.images.mask} tx="decal" ty="decal" />
+                   <ImageShader image={skinLit} tx="decal" ty="decal" />
+                 </Shader>
+               </Fill>
++            </Group>
++          </Canvas>
++        </View>
++      )}
++      {/* lớp trên sương: dơi, màn đen, ngón tay ảo, Dynamic Island */}
++      <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
++        {ready && (
++          <Group transform={fitTransform}>
+               <Bats t0={batsAt} time={time} basis={basis} />
+               <Fill color="black" opacity={blackout} />
+               {/* ngón tay ảo (chỉ demo) */}
+@@ -822,11 +851,10 @@
+                 <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.22} />
+                 <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.55} style="stroke" strokeWidth={1.5} />
+               </Group>
+-            </Group>
+-          )}
++          </Group>
++        )}
+           {ready && <IslandPill islandT={jump.islandT} time={time} skin={skinLit} lit={candle} />}
+-        </Canvas>
+-      </GestureDetector>
++      </Canvas>
+ 
+       <Animated.View style={[StyleSheet.absoluteFill, uiStyle]} pointerEvents={lit ? "none" : "box-none"}>
+         <Animated.View style={[styles.header, { top: fitState.oy + 64 * fitState.k }, headerStyle]} pointerEvents="none">

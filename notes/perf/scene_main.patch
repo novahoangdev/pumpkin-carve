@@ -1,0 +1,60 @@
+--- a/app/src/scene/PumpkinScene.tsx	2026-10-31 16:07:53
++++ b/app/src/scene/PumpkinScene.tsx	2026-10-31 16:09:50
+@@ -79,6 +79,8 @@
+ const LIGHT_K = 1; // độ phân giải bản đồ ánh nến (px / pt ảnh gốc)
+ /** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */
+ const ATMOS_DOWN = 3;
++/** Canvas chính (nền, bí, mưa…) vẽ ở mật độ 1/MAIN_DOWN: 1.5 = 2x trên máy 3x (GPU làm ít hơn 2,25 lần). 1 = như cũ. */
++const MAIN_DOWN = 1.5;
+ const clamp = (v: number, a: number, b: number) => {
+   "worklet";
+   return Math.max(a, Math.min(b, v));
+@@ -708,6 +710,10 @@
+     }
+     const sx = Math.sin(t * 61) * shake, sy = Math.cos(t * 53) * shake;
+     return [{ translateX: f.ox + sx }, { translateY: f.oy + sy }, { scale: f.k }];
++  });
++  const fitTransformMain = useDerivedValue(() => {
++    const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
++    return [{ translateX: t[0].translateX! / MAIN_DOWN }, { translateY: t[1].translateY! / MAIN_DOWN }, { scale: t[2].scale! / MAIN_DOWN }];
+   });
+   // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
+   const fitTransformLow = useDerivedValue(() => {
+@@ -754,10 +760,14 @@
+ 
+   return (
+     <View style={styles.root} onLayout={onLayout}>
+-      <GestureDetector gesture={gesture}>
++      {size.w > 0 && (
++      <View
++        pointerEvents="none"
++        style={{ position: "absolute", left: 0, top: 0, width: size.w / MAIN_DOWN, height: size.h / MAIN_DOWN, transformOrigin: "0 0", transform: [{ scale: MAIN_DOWN }] }}
++      >
+         <Canvas style={StyleSheet.absoluteFill}>
+           {ready && (
+-            <Group transform={fitTransform}>
++            <Group transform={fitTransformMain}>
+               <Fill>
+                 <Shader source={background} uniforms={bgU}>
+                   <ImageShader image={bgLit} tx="clamp" ty="clamp" />
+@@ -821,7 +831,8 @@
+             </Group>
+           )}
+         </Canvas>
+-      </GestureDetector>
++      </View>
++      )}
+       {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
+       {ready && size.w > 0 && (
+         <View
+@@ -856,6 +867,10 @@
+           {ready && <IslandPill islandT={jump.islandT} time={time} skin={skinLit} lit={candle} />}
+       </Canvas>
+ 
++      {/* nhận gesture trên toàn màn hình (pt màn hình), nằm trên các canvas, dưới UI */}
++      <GestureDetector gesture={gesture}>
++        <View style={StyleSheet.absoluteFill} />
++      </GestureDetector>
+       <Animated.View style={[StyleSheet.absoluteFill, uiStyle]} pointerEvents={lit ? "none" : "box-none"}>
+         <Animated.View style={[styles.header, { top: fitState.oy + 64 * fitState.k }, headerStyle]} pointerEvents="none">
+           <Text style={styles.title}>PUMPKIN CARVE</Text>
