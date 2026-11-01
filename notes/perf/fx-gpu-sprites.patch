@@ -1,0 +1,153 @@
+--- a/app/src/fx/ImpactDust.tsx	2026-10-31 16:06:28
++++ b/app/src/fx/ImpactDust.tsx	2026-10-31 17:10:06
+@@ -1,9 +1,10 @@
+ import React from "react";
+-import { Atlas, BlurMask, Group, Path, Skia, useImage, type SkPath } from "react-native-skia";
++import { Atlas, BlurMask, Group, Path, Skia, type SkPath } from "react-native-skia";
+ import { useDerivedValue, type SharedValue } from "react-native-reanimated";
+ import type { Impact } from "./jump";
+ import { PUMPKIN_FOOT_W, type Basis } from "../scene/view";
+ import { BASE_BASIS, NONE, SAMPLING, behindPumpkin, clamp01, fall, proj, put, smoothstep, useSpriteBuffers, wrap } from "./pfx_atlas";
++import { useGpuImage } from "../perf/gpu";
+ 
+ const LIFE = 3.4; // s, mọi thứ tắt hẳn sau mốc này (lá rơi chậm + nằm lại một chút)
+ const RING_LIFE = 0.42;
+@@ -68,7 +69,7 @@
+   spread?: number;
+   basis?: SharedValue<Basis>;
+ }) {
+-  const sheet = useImage(SHEET);
++  const sheet = useGpuImage(SHEET, { mipmapped: true });
+ 
+   const data = useDerivedValue<number[]>(() => {
+     const list = impacts.get();
+--- a/app/src/fx/Match.tsx	2026-10-31 16:34:59
++++ b/app/src/fx/Match.tsx	2026-10-31 17:10:06
+@@ -1,21 +1,9 @@
+ import type { Basis } from "../scene/view";
+ import React from "react";
+-import {
+-  Atlas,
+-  BlurMask,
+-  Circle,
+-  Group,
+-  Path,
+-  RadialGradient,
+-  Rect,
+-  Shader,
+-  Skia,
+-  useColorBuffer,
+-  useImage,
+-  vec,
+-} from "react-native-skia";
++import { Atlas, BlurMask, Circle, Group, Path, RadialGradient, Rect, Shader, Skia, useColorBuffer, vec } from "react-native-skia";
+ import { useAnimatedReaction, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
+ import { BASE_BASIS, NONE, SAMPLING, baseToFloor, proj, put, screenToPumpkinWorld, useSpriteBuffers } from "./pfx_atlas";
++import { useGpuImage } from "../perf/gpu";
+ 
+ export const MATCH_REST = { x: 352, y: 800 };
+ export const MATCH_LEN = 74;
+@@ -130,7 +118,7 @@
+   time: SharedValue<number>;
+   basis?: SharedValue<Basis>;
+ }) {
+-  const sheet = useImage(SHEET);
++  const sheet = useGpuImage(SHEET, { mipmapped: true });
+ 
+   // ── vận tốc que diêm → lửa nghiêng (lò xo) + dãn; chốt thời điểm/vị trí lửa tắt cho sợi khói ──
+   const motion = useSharedValue({ t: -1, x: 0, y: 0, vx: 0, vy: 0 });
+--- a/app/src/fx/Gust.tsx	2026-10-31 16:47:49
++++ b/app/src/fx/Gust.tsx	2026-10-31 17:10:06
+@@ -1,9 +1,10 @@
+ import React from "react";
+-import { Atlas, useColorBuffer, useImage, useRSXformBuffer, useRectBuffer } from "react-native-skia";
++import { Atlas, useColorBuffer, useRSXformBuffer, useRectBuffer } from "react-native-skia";
+ import type { SharedValue } from "react-native-reanimated";
+ import { CAM, VIEW } from "../scene/layout";
+ import type { Basis } from "../scene/view";
+ import { BASE_BASIS, SAMPLING, behindPumpkin } from "./pfx_atlas";
++import { useGpuImage } from "../perf/gpu";
+ 
+ /**
+  * Cơn gió cuốn lá phong ở intro (mặc định t ≈ 1,6 s, lúc camera đang cẩu từ trăng xuống):
+@@ -165,8 +166,8 @@
+   /** "scene": lá trung cảnh + lá sàn (vẽ sau quả bí, trước mưa); "fg": lá tiền cảnh sát ống kính (vẽ trên sương / atmos) */
+   layer: "scene" | "fg";
+ }) {
+-  const fgSheet = useImage(FG_SHEET);
+-  const scSheet = useImage(SC_SHEET);
++  const fgSheet = useGpuImage(FG_SHEET, { mipmapped: true });
++  const scSheet = useGpuImage(SC_SHEET, { mipmapped: true });
+   const vw = VIEW.w, vh = VIEW.h;
+   // chỉ lớp đang vẽ mới tính (lớp kia giữ 1 sprite rỗng)
+   const nFg = layer === "fg" ? N_FG : 1;
+--- a/app/src/fx/Particles.tsx	2026-10-31 16:34:59
++++ b/app/src/fx/Particles.tsx	2026-10-31 17:10:06
+@@ -1,9 +1,10 @@
+ import React from "react";
+-import { Atlas, Group, useImage } from "react-native-skia";
++import { Atlas, Group } from "react-native-skia";
+ import { useDerivedValue, type SharedValue } from "react-native-reanimated";
+ import { FLAME_W } from "../scene/layout";
+ import { PUMPKIN_FOOT_W, type Basis } from "../scene/view";
+ import type { Impact } from "./jump";
++import { useGpuImage } from "../perf/gpu";
+ import {
+   BASE_BASIS,
+   LANTERN_W,
+@@ -88,7 +89,7 @@
+   /** cú tiếp đất của quả bí (jump.impacts): vụn đang nằm gần chân bí nảy nhẹ lên theo */
+   impacts?: SharedValue<Impact[]>;
+ }) {
+-  const sheet = useImage(SHEET);
++  const sheet = useGpuImage(SHEET, { mipmapped: true });
+ 
+   // điểm sinh trên mặt bí (giao tia–ellipsoid) chỉ phụ thuộc burst → tính một lần mỗi khi có burst mới, không phải mỗi frame
+   const spawn = useDerivedValue(() => {
+--- a/app/src/fx/Smoke.tsx	2026-10-31 17:00:28
++++ b/app/src/fx/Smoke.tsx	2026-10-31 17:10:07
+@@ -1,10 +1,11 @@
+ import React from "react";
+-import { Atlas, useImage } from "react-native-skia";
++import { Atlas } from "react-native-skia";
+ import { useAnimatedReaction, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
+ import type { Basis } from "../scene/view";
+ import { MOUTH } from "../scene/layout";
+ import type { Burst } from "./Particles";
+ import { BASE_BASIS, NONE, SAMPLING, proj, pumpkinWorld, put, useSpriteBuffers } from "./pfx_atlas";
++import { useGpuImage } from "../perf/gpu";
+ 
+ /**
+  * Wisp of smoke after the candle is blown out.
+@@ -54,7 +55,7 @@
+   porch: SharedValue<number>;
+   storm: SharedValue<number>;
+ }) {
+-  const sheet = useImage(SHEET);
++  const sheet = useGpuImage(SHEET, { mipmapped: true });
+   const exits = useSharedValue<Exit[]>([]);
+ 
+   // pick the exits once, when the flame dies: the 2 highest holes (smoke rises), top part of each hole
+--- a/app/src/fx/Bats.tsx	2026-10-31 17:09:52
++++ b/app/src/fx/Bats.tsx	2026-10-31 17:10:07
+@@ -1,9 +1,10 @@
+ import React, { useMemo } from "react";
+-import { Atlas, Group, Skia, matchFont, useColorBuffer, useImage, useRSXformBuffer, useRectBuffer } from "react-native-skia";
++import { Atlas, Group, Skia, matchFont, useColorBuffer, useRSXformBuffer, useRectBuffer } from "react-native-skia";
+ import { useDerivedValue, type SharedValue } from "react-native-reanimated";
+ import { PUMPKIN, VIEW } from "../scene/layout";
+ import type { Basis } from "../scene/view";
+ import { HIDDEN_XF, SAMPLING, proj, smoothstep, wrap } from "./pfx_atlas";
++import { useGpuImage } from "../perf/gpu";
+ 
+ /** Số dơi (= số điểm đích của chữ). synth_audio.py đọc hằng số này. */
+ export const BAT_COUNT = 390;
+@@ -163,7 +164,7 @@
+  * phát object / mảng mỗi frame.
+  */
+ export function Bats({ t0, time, basis }: { t0: SharedValue<number>; time: SharedValue<number>; basis: SharedValue<Basis> }) {
+-  const sheet = useImage(SHEET);
++  const sheet = useGpuImage(SHEET, { mipmapped: true });
+   const T = useMemo(() => buildTargets(), []);
+ 
+   const tick = useDerivedValue(() => {
