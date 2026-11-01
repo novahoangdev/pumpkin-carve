@@ -7,12 +7,12 @@ import { REST } from "../demo/script";
 import { HIDDEN_XF, SAMPLING, proj, smoothstep, wrap } from "./pfx_atlas";
 import { useGpuImage } from "../perf/gpu";
 
-/** Số dơi (= số điểm đích của chữ). synth_audio.py đọc hằng số này. */
+/** Number of bats (= number of text target points). synth_audio.py reads this constant. */
 export const BAT_COUNT = 720;
-/** Toàn bộ màn dơi: ùa ra → xếp chữ → giữ → tan ra lướt qua ống kính (s, tính từ lúc dơi ra). */
+/** Whole bat sequence: swarm out → form the text → hold → break up sweeping past the lens (s, since the bats come out). */
 export const BAT_DURATION = 5.8;
 
-/** Mốc (s, tính từ lúc dơi ra) — ghi trong notes/fx.md cho agent chính / synth_audio. */
+/** Marks (s, since the bats come out) — recorded in notes/fx.md for the main agent / synth_audio. */
 export const BAT_TIMES = { emergeEnd: 1.25, formed: 3.0, holdEnd: 4.2, gone: 5.8 };
 
 // [text, font size (pt), line centre (fraction of the view height), bats, max width (fraction of the view width),
@@ -75,9 +75,9 @@ for (let az = 0; az < 8; az++) {
 }
 
 /**
- * Điểm đích: lấy mẫu vùng tô của text path Skia (Skia.Path.MakeFromText) trên lưới mịn có jitter rồi chọn đều bằng
- * farthest-point sampling → N điểm phủ đều nét chữ. Toạ độ màn hình khung nghỉ → chiếu ra mặt phẳng cách camera gốc
- * TEXT_DEPTH (m) theo camera lúc dơi ra. Trả về [x, y (pt quanh tâm khung, y lên), khoảng cách (pt), dòng, r1..r5, thứ tự ra] × BAT_COUNT. Chạy MỘT lần lúc mount (JS thread).
+ * Target points: sample the fill area of a Skia text path (Skia.Path.MakeFromText) on a fine jittered grid then pick evenly with
+ * farthest-point sampling → N points evenly covering the letter strokes. Rest-frame screen coordinates → projected onto a plane
+ * TEXT_DEPTH (m) from the original camera, using the camera at the moment the bats come out. Returns [x, y (pt around the frame center, y up), spacing (pt), line, r1..r5, spawn order] × BAT_COUNT. Runs ONCE on mount (JS thread).
  */
 const buildTargets = (): number[] => {
   const out: number[] = [];
@@ -119,13 +119,13 @@ const buildTargets = (): number[] => {
       }
     }
     if (pts.length < 2) {
-      // không có font: một vòng elip dự phòng
+      // no font: fallback ellipse ring
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2;
         pts.push(VIEW.w / 2 + Math.cos(a) * 150, VIEW.h * cy + Math.sin(a) * 40);
       }
     }
-    // farthest-point sampling: n điểm phủ đều
+    // farthest-point sampling: n evenly covering points
     const m = pts.length / 2;
     const dist = new Float64Array(m).fill(1e18);
     const pick: number[] = [];
@@ -144,8 +144,8 @@ const buildTargets = (): number[] => {
       }
       cur = bi;
     }
-    // khoảng cách giữa các con (pt) → cỡ dơi: sải cánh ≈ 1,7 × khoảng cách
-    // khoảng cách trung bình tới con gần nhất (pt) → cỡ dơi
+    // spacing between bats (pt) → bat size: wingspan ≈ 1.7 × spacing
+    // average distance to the nearest bat (pt) → bat size
     let gsum = 0;
     for (let a = 0; a < n; a++) {
       let best = 1e18;
@@ -172,7 +172,7 @@ const buildTargets = (): number[] => {
   return out;
 };
 
-// trạng thái mỗi con, ghi tại chỗ trong một mảng sống trên UI runtime (không tạo object mỗi frame)
+// per-bat state, written in place into one array living on the UI runtime (no object allocation per frame)
 const TS = 11; // per bat in the target array: x, y, gap, line, r1..r5, order, edge
 const ST = 16; // [x, y, s, rot, cellX, cellY, aA, trailX, trailY, trailA, rimR, rimG, rimB, rimA, formed, _]
 type Store = { __fxBats?: Float64Array; __fxBatsP?: number[]; __fxB0?: Float64Array; __fxB0t?: number; __fxB1?: Float64Array };
@@ -191,20 +191,20 @@ const getStore = () => {
 };
 
 /**
- * Màn dơi cuối clip, toàn bộ trong KHÔNG GIAN CẢNH (m), chiếu qua camera xem:
- * 1. BAY TỚI (0–≈2 s): đàn dơi bay tới từ sân tối sau lan can / bầu trời xa, sà qua hiên về phía ống kính (vài con
- *    lướt sát ống kính), vòng lên rồi mới rẽ vào chữ. Không có gì phát ra từ quả bí.
- * 2. XẾP CHỮ (→ 3,0 s): mỗi con lái về điểm đích của nó trong chữ "HAPPY / HALLOWEEN" / "@novahoangdev" (3 dòng, dòng dưới nhỏ) (lấy mẫu từ text path
- *    Skia, mặt phẳng cách camera 2,1 m) bằng lò xo tắt dần tới hạn — steering mượt, nghiệm giải tích từ vị trí + vận tốc lúc rẽ,
- *    kèm lượn lờ nhẹ riêng từng con. Đến nơi thì ngóc lên quay về camera, cánh dang.
- * 3. GIỮ (3,0–4,2 s): vẫn vỗ cánh nhẹ (chậm lại) + chao nhẹ; viền trăng lạnh (pass A) + ánh cam hắt từ quả bí (pass B) → chữ đọc
- *    được cả trên nền trời lẫn tường tối.
- * 4. TAN RA (4,2–5,8 s): toả từ giữa chữ ra hai bên (trễ theo khoảng cách tới tâm), lao thẳng về phía ống kính, phóng to, nhoè
- *    chuyển động và lướt qua mặt phẳng ống kính.
- * Hình: sprite Blender 24 hướng nhìn × 8 pha vỗ có motion blur cánh.
+ * End-of-clip bat sequence, entirely in SCENE SPACE (m), projected through the view camera:
+ * 1. FLY IN (0–≈2 s): the swarm flies in from the dark yard behind the railing / the distant sky, swoops across the porch toward the lens (a few
+ *    skim right past the lens), loops up and only then turns into the text. Nothing comes out of the pumpkin.
+ * 2. FORM TEXT (→ 3.0 s): each bat steers to its target point in the text "HAPPY / HALLOWEEN" / "@novahoangdev" (3 lines, bottom line smaller) (sampled from a Skia text path
+ *    on a plane 2.1 m from the camera) with a critically damped spring — smooth steering, analytic solution from the position + velocity at the turn,
+ *    plus a slight individual hover. On arrival it pitches up facing the camera, wings spread.
+ * 3. HOLD (3.0–4.2 s): still flapping gently (slower) + slight sway; cold moon rim (pass A) + orange glow from the pumpkin (pass B) → the text reads
+ *    against both the sky and the dark wall.
+ * 4. BREAK UP (4.2–5.8 s): spreads from the middle of the text outward (delayed by distance to the center), rushes straight at the lens, grows, motion
+ *    blurs and sweeps past the lens plane.
+ * Look: Blender sprites, 24 view directions × 8 flap phases with wing motion blur.
  *
- * Hiệu năng: 1 mapper tính 600 con / frame, ghi vào Float64Array dùng chung trên UI runtime; 3 Atlas đọc lại tại chỗ. Không cấp
- * phát object / mảng mỗi frame.
+ * Performance: 1 mapper computes 600 bats / frame, writing into a shared Float64Array on the UI runtime; 3 Atlases read it back in place. No
+ * object / array allocation per frame.
  */
 export function Bats({
   t0,
@@ -266,7 +266,7 @@ export function Bats({
       S[o + 13] = 0;
       const q0 = i * TS;
       const r1 = T[q0 + 4], r2 = T[q0 + 5], r3 = T[q0 + 6], r4 = T[q0 + 7], r5 = T[q0 + 8];
-      // đích (m): tia của camera lúc dơi ra qua điểm chữ, cách mắt TEXT_DEPTH
+      // target (m): ray of the camera at the moment the bats come out through the text point, TEXT_DEPTH from the eye
       const sx = T[q0] / B0[12], sy = T[q0 + 1] / B0[12];
       const tx = B0[0] + (B0[3] * sx + B0[6] * sy - B0[9]) * TEXT_DEPTH;
       const ty = B0[1] + (B0[4] * sx + B0[7] * sy - B0[10]) * TEXT_DEPTH;
@@ -309,11 +309,11 @@ export function Bats({
       let vx = (2 * iu * (cx - p0x) + 2 * u * (p2x - cx)) / tg;
       let vy = (2 * iu * (cy - p0y) + 2 * u * (p2y - cy)) / tg;
       let vz = (2 * iu * (cz - p0z) + 2 * u * (p2z - cz)) / tg;
-      let formed = 0; // 0..1 đã vào chữ
-      // tan từ giữa chữ ra hai bên
+      let formed = 0; // 0..1 settled into the text
+      // break up from the middle of the text outward
       const tD = BAT_TIMES.holdEnd + 0.18 * Math.min(1, Math.abs(T[q0]) / 200);
       if (tt > tg) {
-        // 2. lò xo tắt dần tới hạn về đích (+ lượn lờ riêng)
+        // 2. critically damped spring to the target (+ individual hover)
         const w = 5.6 + 1.6 * r4;
         const tau = Math.min(tt, tD - delay) - tg;
         const e = Math.exp(-w * tau);
@@ -330,7 +330,7 @@ export function Bats({
         x += Math.sin(now * (1.7 + r3) + i) * wob;
         z += Math.sin(now * (2.3 + r5) + i * 1.7) * wob * 0.8;
         if (t > tD) {
-          // 4. tan ra: lao về phía ống kính, tản ra quanh camera
+          // 4. break up: rush toward the lens, scatter around the camera
           const q = t - tD;
           const aimX = B0[0] + (r2 - 0.5) * 0.7, aimY = B0[1] - 0.1, aimZ = B0[2] + (r4 - 0.45) * 0.5;
           let dx = aimX - x, dy = aimY - y, dz = aimZ - z;
@@ -354,7 +354,7 @@ export function Bats({
       if (depth < 0.12) continue;
       const px = P[0], py = P[1], kpt = P[3];
 
-      // hướng thân: theo vận tốc; lơ lửng thì ngóc lên, quay về phía mắt (thấy dơi dang cánh trước mặt)
+      // body direction: along the velocity; when hovering it pitches up facing the eye (bat seen with wings spread)
       const spd = Math.hypot(vx, vy, vz);
       let ex = b.e[0] - x, ey = b.e[1] - y;
       const ehl = Math.hypot(ex, ey) || 1;
@@ -380,11 +380,11 @@ export function Bats({
       uy = uy * cb - ry * sb;
       uz = uz * cb;
 
-      // cỡ: dơi thật khi bay (k 0,42–0,6), co về cỡ "điểm chữ" khi xếp, lớn lại khi tan
+      // size: real bat size in flight (k 0.42–0.6), shrinks to "text dot" size when formed, grows again on break-up
       const kNat = 0.42 + r5 * 0.18;
       const k = kNat + (kT - kNat) * formed;
 
-      // chọn ô theo hướng mắt trong hệ thân dơi
+      // pick the cell by the eye direction in the bat body frame
       const vxx = b.e[0] - x, vyy = b.e[1] - y, vzz = b.e[2] - z;
       const vl = Math.hypot(vxx, vyy, vzz) || 1;
       const vr = (vxx * Rx + vyy * Ry + vzz * Rz) / vl;
@@ -393,7 +393,7 @@ export function Bats({
       const elI = vu < -0.42 ? 0 : vu > 0.42 ? 2 : 1;
       const azI = wrap(Math.round(Math.atan2(vr, -vf) / (Math.PI / 4)), 8);
       const row = azI * 3 + elI;
-      const fq = (9 + r3 * 3) * (1 - 0.65 * formed); // giữ chữ: vỗ chậm, nhẹ
+      const fq = (9 + r3 * 3) * (1 - 0.65 * formed); // holding the text: slow, gentle flaps
       const ph = wrap(Math.round((tt * fq + r2) * PHASES), PHASES);
       const Ux = CELL_UP[row * 3], Uy = CELL_UP[row * 3 + 1], Uz = CELL_UP[row * 3 + 2];
       const uwx = Rx * Ux + fx * Uy + ux * Uz, uwy = Ry * Ux + fy * Uy + uy * Uz, uwz = Rz * Ux + fz * Uy + uz * Uz;
@@ -412,8 +412,8 @@ export function Bats({
       S[o + 4] = ph * CELL;
       S[o + 5] = row * CELL;
       S[o + 6] = alpha;
-      // (motion blur: đã nướng trong sprite — cánh nhoè theo màn trập Cycles)
-      // pass B: ánh nến (gần bí) + ánh cam hắt lên chữ từ quả bí phía dưới + viền trăng lạnh nhẹ
+      // (motion blur: baked into the sprite — wings blurred by the Cycles shutter)
+      // pass B: candlelight (near the pumpkin) + orange glow cast up onto the text from the pumpkin below + slight cold moon rim
       // rim when in the text: moonlight from above on the upper part of each letter, pumpkin orange from below on the lower
       // part (per bat: its height inside its line + a little noise), so the letters get a two-tone edge
       const dc = Math.hypot(x - CANDLE[0], y - CANDLE[1], z - CANDLE[2]);
@@ -476,7 +476,7 @@ export function Bats({
     v[2] = 0.42 - 0.4 * f;
     v[3] = trail ? S[o + 9] : S[o + 6];
   });
-  // ── pass B (cộng sáng): rim nến / cam / trăng ──
+  // ── pass B (additive): candle / orange / moon rim ──
   const bX = useRSXformBuffer(BAT_COUNT, (v, i) => {
     "worklet";
     if (tick.value < 0) {

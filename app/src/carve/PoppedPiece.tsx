@@ -7,12 +7,12 @@ import { CROP } from "../scene/layout";
 const DUR = 560;
 
 /**
- * Mảnh vỏ vừa khắc xong là một miếng vỏ dày thật bị đẩy vào trong quả bí:
- * 1. khe cắt tối hiện quanh mép ngay khi khép nét, miếng còn kẹt một nhịp;
- * 2. miếng NGẢ RA SAU quanh mép dưới (xoay 3D có phối cảnh, mép trên đi vào trước) → lộ mặt cắt thịt bí vàng ướt ở mép trên
- *    (bề dày vỏ), mặt vỏ tối dần vì đi vào bóng trong lòng bí;
- * 3. rồi tụt xuống và khuất sau mép dưới của lỗ (mọi thứ bị cắt theo đúng hình lỗ: không lòi ra ngoài mặt vỏ).
- * Lỗ (mask mới) đã hiện ngay phía sau, nên khi miếng tụt mất là thấy lòng bí.
+ * A just-carved piece is a real thick slab of rind pushed into the pumpkin:
+ * 1. a dark cut gap appears around the edge as soon as the stroke closes, the piece stays stuck for a beat;
+ * 2. the piece TILTS BACK around its bottom edge (3D rotation with perspective, top edge goes in first) → reveals the wet yellow flesh cut face at the top edge
+ *    (rind thickness), the rind face darkens as it moves into the shadow inside the pumpkin;
+ * 3. then it drops and disappears behind the bottom edge of the hole (everything is clipped to the exact hole shape: nothing pokes out over the rind).
+ * The hole (new mask) is already visible behind it, so once the piece drops out you see the pumpkin interior.
  */
 export function PoppedPiece({
   path,
@@ -30,9 +30,9 @@ export function PoppedPiece({
   const p = useSharedValue(0);
   const b = path.computeTightBounds();
   const cx = b.x + b.width / 2;
-  const by = b.y + b.height; // bản lề: mép dưới miếng vỏ
+  const by = b.y + b.height; // hinge: bottom edge of the rind piece
   const spin = (cx < CROP.x + CROP.s / 2 ? -1 : 1) * 0.1;
-  const thick = Math.max(2.2, Math.min(9, Math.min(b.width, b.height) * 0.16)); // bề dày vỏ thấy ở mặt cắt (pt)
+  const thick = Math.max(2.2, Math.min(9, Math.min(b.width, b.height) * 0.16)); // rind thickness seen at the cut face (pt)
   const persp = Math.max(160, b.height * 4);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function PoppedPiece({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // khựng một nhịp (dao vừa rút, miếng còn kẹt), ngả ra sau (nhanh dần như bị đẩy), rồi rơi tụt xuống
+  // stall for a beat (knife just pulled out, piece still stuck), tilt back (accelerating as if pushed), then drop down
   const q = useDerivedValue(() => Math.max(0, (p.value - 0.1) / 0.9));
   const tip = useDerivedValue(() => {
     const t = Math.min(1, q.value / 0.65);
@@ -62,7 +62,7 @@ export function PoppedPiece({
     { translateX: -cx },
     { translateY: -by },
   ]);
-  // mặt cắt (thịt bí) ở mép trên: cùng hình, nằm "sau" mặt vỏ một bề dày → khi miếng ngả ra sau thì lộ ra phía trên
+  // cut face (pumpkin flesh) at the top edge: same shape, sits one thickness "behind" the rind face → shows above as the piece tilts back
   const edgeTransform = useDerivedValue(() => {
     const a = tip.value;
     return [
@@ -86,7 +86,7 @@ export function PoppedPiece({
   return (
     <Group>
       <Group clip={path} opacity={opacity}>
-        {/* mặt cắt thịt bí: vàng ướt, sáng ở rìa ngoài, tối dần vào trong */}
+        {/* flesh cut face: wet yellow, bright at the outer rim, darker toward the inside */}
         <Group transform={edgeTransform} opacity={edgeOp}>
           <Path path={path} color="#e7a446" />
           <Group clip={path}>
@@ -96,20 +96,20 @@ export function PoppedPiece({
           </Group>
           <Path path={path} color="#3a1000" opacity={edgeShade} />
         </Group>
-        {/* mặt vỏ */}
+        {/* rind face */}
         <Group transform={transform}>
           <Group clip={path}>
             <Image image={skinLit} x={CROP.x} y={CROP.y} width={CROP.s} height={CROP.s} />
             <Image image={skinDark} x={CROP.x} y={CROP.y} width={CROP.s} height={CROP.s} opacity={darkOp} />
             <Fill color="#140500" opacity={shade} />
           </Group>
-          {/* mép vỏ bắt sáng mảnh khi vừa ngả */}
+          {/* thin rind edge catching light just as it tilts */}
           <Path path={path} style="stroke" strokeWidth={0.8} color="#ffcf8a" opacity={edgeOp}>
             <BlurMask blur={0.6} style="normal" />
           </Path>
         </Group>
       </Group>
-      {/* khe cắt: viền tối quanh lỗ ngay khi khép nét (vẽ trên cùng, mờ dần khi miếng tụt) */}
+      {/* cut gap: dark outline around the hole as soon as the stroke closes (drawn on top, fades as the piece drops) */}
       <Path path={path} style="stroke" strokeWidth={2.2} color="#1a0600" opacity={kerf}>
         <BlurMask blur={1} style="normal" />
       </Path>

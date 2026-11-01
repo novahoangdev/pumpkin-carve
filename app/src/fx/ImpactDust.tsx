@@ -6,20 +6,20 @@ import { PUMPKIN_FOOT_W, type Basis } from "../scene/view";
 import { BASE_BASIS, NONE, SAMPLING, behindPumpkin, clamp01, fall, proj, put, smoothstep, useSpriteBuffers, wrap } from "./pfx_atlas";
 import { useGpuImage } from "../perf/gpu";
 
-const LIFE = 3.4; // s, mọi thứ tắt hẳn sau mốc này (lá rơi chậm + nằm lại một chút)
+const LIFE = 3.4; // s, everything is fully gone after this (leaves fall slowly + rest a bit)
 const RING_LIFE = 0.42;
 const TAU = Math.PI * 2;
-const SLOTS = 3; // số cú tiếp đất gần nhất được vẽ cùng lúc
+const SLOTS = 3; // number of most recent landings drawn at once
 const PER_IMPACT = 96;
 const MAX_SPRITES = SLOTS * PER_IMPACT;
-const M = 1 / 646; // m mỗi pt ảnh gốc ở độ sâu quả bí (giữ nhịp / cỡ của bản cũ)
+const M = 1 / 646; // m per original-image pt at the pumpkin depth (keeps the pace / size of the old version)
 const G = 7.6;
 
 const SHEET = require("../../assets/fx/pfx_dust.png");
 // pfx_dust.png:
-//   hàng 0–7 (ô 64): 8 lá thu (4 phong, 4 sồi; ảnh thật, uốn cong + chiếu sáng trong Blender) × 12 góc lật quanh gân
-//     chính (30°/ô; 90°/270° là nhìn cạnh, 120..240° là mặt lưng nhạt màu hơn)
-//   hàng 512: 4 cụm bụi 128×64 (fbm, mép lởm chởm, sáng ấm phía trên-trái, đáy tối lạnh) | hạt bụi 16 | bóng 64×32
+//   rows 0–7 (64 cells): 8 autumn leaves (4 maple, 4 oak; real photos, curled + lit in Blender) × 12 flip angles around the main
+//     vein (30°/cell; 90°/270° are edge-on, 120..240° show the paler back side)
+//   row 512: 4 dust puffs 128×64 (fbm, ragged edges, warm-lit upper-left, cool dark bottom) | dust grain 16 | shadow 64×32
 const C = 64;
 const ROW_PUFF = 8 * C;
 const SPR_MOTE = [512, ROW_PUFF, 16, 16];
@@ -36,7 +36,7 @@ const hash = (n: number) => {
   return s - Math.floor(s);
 };
 
-/** Lá (m, chưa tính chạm sàn): bị hất lên, cản gió mạnh, rơi chậm, đung đưa như con lắc. → [ngang, cao, sway, calm] */
+/** Leaf (m, before floor contact): tossed up, strong air drag, falls slowly, swings like a pendulum. → [across, height, sway, calm] */
 const leafPath = (a: number, vh0: number, vz0: number, sway: number, w: number, ph: number) => {
   "worklet";
   const kd = 2.8;
@@ -48,16 +48,16 @@ const leafPath = (a: number, vh0: number, vz0: number, sway: number, w: number, 
 };
 
 /**
- * Bụi + lá khô tung lên mỗi lần quả bí tiếp đất — trong KHÔNG GIAN CẢNH (m), chiếu qua camera xem, nên nhìn quanh /
- * nghiêng máy thì bụi và lá nằm đúng trên mặt thềm quanh chân bí, cụm phía sau bị quả bí che, to nhỏ theo độ sâu.
+ * Dust + dry leaves kicked up each time the pumpkin lands — in SCENE SPACE (m), projected through the view camera, so when looking around /
+ * tilting the phone the dust and leaves sit correctly on the porch around the pumpkin base, puffs behind are hidden by the pumpkin, sized by depth.
  *
- * - Cụm bụi mềm (sprite fbm) phụt ra từ mép vùng chân bí, toả theo mặt thềm (ra trước + hai bên), chậm dần vì lực cản,
- *   phồng to + bốc nhẹ lên rồi tan.
- * - Sạn nặng: bắn thấp, rơi theo trọng lực, nảy trên thềm. Bụi mịn lơ lửng lấp lánh bắt ánh đèn.
- * - Lá thu thật (8 loại × 12 góc lật): bị hất lên, cản gió lớn, rơi chậm, đung đưa + lật; tiếp đất thì nằm bẹp trên thềm
- *   — góc lật và hướng gân lá tính từ phối cảnh thật của mặt sàn; có bóng mềm dưới sàn.
- * - Cú rơi mạnh: vòng sóng mảnh loang trên ván sàn (vòng tròn trên mặt thềm chiếu ra màn hình → elip đúng phối cảnh).
- * Cỡ / số lượng / độ đậm theo strength. Không truyền `basis` thì dùng camera gốc.
+ * - Soft dust puffs (fbm sprites) burst from the edge of the base area, spreading along the porch (forward + sideways), slowing from drag,
+ *   swelling + rising slightly then dissipating.
+ * - Heavy grit: shot out low, falls under gravity, bounces on the porch. Fine dust floats and sparkles catching the light.
+ * - Real autumn leaves (8 kinds × 12 flip angles): tossed up, high air drag, fall slowly, swing + flip; on landing they lie flat on the porch
+ *   — flip angle and vein direction computed from the real floor perspective; with a soft shadow on the floor.
+ * - Hard landing: a thin shock ring spreads over the floor boards (circle on the porch plane projected to screen → perspective-correct ellipse).
+ * Size / count / opacity scale with strength. Without `basis`, the original camera is used.
  */
 export function ImpactDust({
   impacts,
@@ -79,7 +79,7 @@ export function ImpactDust({
     const P = [0, 0, 0, 0];
     const Q = [0, 0, 0, 0];
     const st = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    // chân bí trên màn hình bây giờ → đổi độ lệch ngang của cú đáp (pt màn hình) ra mét
+    // pumpkin base on screen now → convert the landing's horizontal offset (screen pt) to meters
     proj(b, PUMPKIN_FOOT_W[0], PUMPKIN_FOOT_W[1], 0, Q);
     const footX = Q[0], kFoot = Q[3];
     const out: number[] = [];
@@ -90,19 +90,19 @@ export function ImpactDust({
       const S = Math.min(1.3, Math.max(0.05, I.strength));
       const seed = I.t * 13.7 + I.x * 0.31;
       const fx = PUMPKIN_FOOT_W[0] + (I.x - footX) / kFoot, fy = 0;
-      const RC = 0.12; // bán kính vùng chân bí chạm sàn (m)
+      const RC = 0.12; // radius of the pumpkin base contact area (m)
       const shadows: number[] = [];
       const puffs: number[] = [];
       const grit: number[] = [];
       const leaves: number[] = [];
       const motes: number[] = [];
 
-      // ── cụm bụi: toả theo mặt thềm, chậm dần, phồng ra rồi tan ──
+      // ── dust puffs: spread along the porch, slow down, swell then dissipate ──
       const nPuff = Math.round(8 + 12 * S);
       for (let i = 0; i < nPuff; i++) {
         const k = seed + i * 1.7;
         const r1 = hash(k), r2 = hash(k + 0.31), r3 = hash(k + 0.77), r4 = hash(k + 1.19);
-        // hướng toả: phía trước + hai bên (phía sau bị bí che)
+        // spread direction: forward + sideways (behind is hidden by the pumpkin)
         const th = -Math.PI / 2 + (i % 2 === 0 ? -1 : 1) * (0.25 + 1.35 * r1);
         const dx = Math.cos(th), dy = Math.sin(th);
         const sp = (70 + 200 * r2) * (0.45 + 0.8 * S) * M;
@@ -121,7 +121,7 @@ export function ImpactDust({
         put(puffs, P[0], P[1], 64, 32, (2 * R * P[3]) / (128 * FILL_PUFF), rot, v * 128, ROW_PUFF, 128, 64, 0.86, 0.8, 0.74, a);
       }
 
-      // ── sạn nặng: bắn thấp, rơi, nảy trên thềm ──
+      // ── heavy grit: shot out low, falls, bounces on the porch ──
       const nGrit = Math.round(5 + 12 * S);
       for (let i = 0; i < nGrit; i++) {
         const k = seed + 40 + i * 2.3;
@@ -139,7 +139,7 @@ export function ImpactDust({
         put(grit, P[0], P[1], 8, 8, (sz / 16) * 1.6, 0, SPR_MOTE[0], SPR_MOTE[1], SPR_MOTE[2], SPR_MOTE[3], 0.42, 0.33, 0.26, 0.85 * life);
       }
 
-      // ── lá thu: hất lên, đung đưa + lật 3D, rơi chậm, nằm bẹp trên thềm rồi mờ ──
+      // ── autumn leaves: tossed up, swing + 3D flip, fall slowly, lie flat on the porch then fade ──
       const nLeaf = S < 0.22 ? 0 : Math.round(1 + 5 * S);
       for (let i = 0; i < nLeaf; i++) {
         const k = seed + 90 + i * 4.1;
@@ -166,7 +166,7 @@ export function ImpactDust({
           p = leafPath(hi, vh0, vz0, sway, w, ph);
           p[1] = 0;
         }
-        // ngang: theo hướng toả + đung đưa vuông góc
+        // across: along the spread direction + perpendicular sway
         const x = x0 + dx * p[0] - dy * p[2], y = y0 + dy * p[0] + dx * p[2], z = Math.max(0, p[1]) + 0.0015;
         if (behindPumpkin(b.e, x, y, z)) continue;
         proj(b, x, y, z, P);
@@ -177,7 +177,7 @@ export function ImpactDust({
         let rot = r3 * TAU + side * (2.5 + 3 * r4) * e2 + 0.35 * (p[2] / sway) * p[3];
         let alpha = 1;
         if (landT >= 0) {
-          // nằm bẹp: pháp tuyến lá dựng đứng → góc lật = góc giữa trục đứng và tia nhìn; gân lá nằm ngang theo hướng bay
+          // lying flat: leaf normal points up → flip angle = angle between the vertical axis and the view ray; vein lies horizontal along the flight direction
           const e = 1 - Math.exp(-landT * 12);
           const vx = b.e[0] - x, vy = b.e[1] - y, vz = b.e[2] - z;
           const cf = vz / (Math.hypot(vx, vy, vz) || 1);
@@ -190,7 +190,7 @@ export function ImpactDust({
           proj(b, x + Math.cos(va) * 0.01, y + Math.sin(va) * 0.01, z, Q);
           const h = Math.atan2(Q[1] - P[1], Q[0] - P[0]) - Math.PI / 2;
           const dr = Math.atan2(Math.sin(h - rot), Math.cos(h - rot));
-          const dr2 = Math.abs(dr) > Math.PI / 2 ? dr - Math.sign(dr) * Math.PI : dr; // gân lá không có chiều
+          const dr2 = Math.abs(dr) > Math.PI / 2 ? dr - Math.sign(dr) * Math.PI : dr; // a leaf vein has no direction
           rot = rot + dr2 * e;
           alpha = 1 - smoothstep(0.5, 1.2, landT);
         }
@@ -209,7 +209,7 @@ export function ImpactDust({
         }
       }
 
-      // ── bụi mịn lơ lửng: bắn ra, khựng lại vì cản gió, trôi chậm và lấp lánh khi bắt đèn ──
+      // ── fine floating dust: shot out, stalls from air drag, drifts slowly and sparkles when catching the light ──
       const nMote = Math.round(8 + 22 * S);
       for (let i = 0; i < nMote; i++) {
         const k = seed + 160 + i * 1.9;
@@ -239,7 +239,7 @@ export function ImpactDust({
   });
   const buf = useSpriteBuffers(data, MAX_SPRITES);
 
-  // ── vòng sóng mảnh trên ván sàn (chỉ cú rơi mạnh): vòng tròn trên mặt thềm, chiếu qua camera ──
+  // ── thin shock ring on the floor boards (hard landings only): circle on the porch plane, projected through the camera ──
   const ring = useDerivedValue(() => {
     const list = impacts.get();
     if (list.length === 0) return RING_NONE;
