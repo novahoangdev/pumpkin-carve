@@ -1,20 +1,20 @@
-# Mở rộng cảnh để app "nhìn quanh" được từ CAM_LOC (camera xoay tại chỗ: yaw ±75°, pitch −55°..+50°, zoom ra 0,55×
-# tiêu cự): trần hiên ván ốp beadboard sơn xanh "haint blue" + dầm, mái hiên kiểu mái chóp có diềm mái, máng xối, ống
-# thoát nước, cột hiên; tường nhà kéo dài sang phải (cửa sổ sáng ấm có rèm, tầng hai, mái chính); lan can trái + cột góc
-# + bậc xuống sân; sân cỏ/đất, đá lát lối đi, hàng rào cọc nhọn, cây trụi lá, vài ngôi nhà xa có cửa sổ sáng; bầu trời
-# đêm toàn cảnh (world, chỉ camera thấy).
-# Chạy cuối build_scene.py (sau porch_details.py), dùng chung globals: sc, C_ENV, C_LIGHT, MB, hexc, img, box, obj,
-# light, M_TRIM, M_STEP, M_SIDING, FRONT_EDGE, WALL_Y, WALL_X0, RAIL_Y, DX0, DX1, CAM_LOC, các thông số phông trời…
+# Extends the scene so the app can "look around" from CAM_LOC (camera rotating in place: yaw ±75°, pitch −55°..+50°, zoom out to 0.55×
+# focal length): beadboard porch ceiling painted "haint blue" + beams, hip-style porch roof with fascia, gutter,
+# downspout, porch posts; house wall extended to the right (warm-lit window with curtains, second floor, main roof); left railing + corner post
+# + steps down to the yard; grass/dirt yard, stepping-stone path, picket fence, bare trees, a few distant houses with lit windows; full
+# night-sky panorama (world, camera-only).
+# Runs at the end of build_scene.py (after porch_details.py), sharing globals: sc, C_ENV, C_LIGHT, MB, hexc, img, box, obj,
+# light, M_TRIM, M_STEP, M_SIDING, FRONT_EDGE, WALL_Y, WALL_X0, RAIL_Y, DX0, DX1, CAM_LOC, the sky backdrop parameters…
 #
-# Nguyên tắc để khung gốc (bg_lit/bg_dark…) gần như y nguyên:
-#   - trần, mái, dầm, diềm, máng xối là vật thật: che trời (bóng/AO dưới mái), hắt sáng đèn hiên, hiện trong phản chiếu
-#     của sàn ướt (PC_ROOF_CAM_ONLY=1: kiểu cũ, chỉ camera thấy, render_passes.py nhận ra nhờ thuộc tính "pc_cam_only");
-#   - bầu trời: bỏ phông phẳng `sky`, thay bằng MỘT ảnh trời toàn cảnh trên world, chỉ đổi cái camera thấy
-#     (Light Path ▸ Is Camera Ray), ánh sáng môi trường vẫn là #141a33 như cũ; trăng giữ đúng hướng cũ (góc trên trái);
-#   - cây, nhà xa, hàng rào đặt ngoài "cửa sổ" nhìn qua lan can của khung gốc (kiểm tra bằng chiếu đỉnh, in WIDE_WARN).
-# Vật liệu tự phát sáng của cảnh (cửa sổ) đặt tên node "emit_env": render_passes.py tắt chúng ở pass ánh nến.
+# Principles that keep the base frame (bg_lit/bg_dark…) almost unchanged:
+#   - ceiling, roof, beams, fascia, gutter are real geometry: they block the sky (shadow/AO under the roof), bounce porch light, show up in reflections
+#     on the wet floor (PC_ROOF_CAM_ONLY=1: old behaviour, camera-only, render_passes.py detects it via the "pc_cam_only" property);
+#   - sky: drop the flat `sky` backdrop, replace it with ONE panoramic sky image on the world, changing only what the camera sees
+#     (Light Path ▸ Is Camera Ray), ambient light stays #141a33 as before; the moon keeps its old direction (top left);
+#   - trees, distant houses, fence sit outside the "window" seen through the railing in the base frame (checked by projecting verts, prints WIDE_WARN).
+# The scene's self-emissive materials (windows) name their node "emit_env": render_passes.py turns them off in the candlelight pass.
 #
-# PC_WIDE=porch,house,left,yard,fence,trees,town,sky,door,rain,relight   chỉ dựng vài phần (mặc định: tất cả)
+# PC_WIDE=porch,house,left,yard,fence,trees,town,sky,door,rain,relight   build only some parts (default: all)
 import json as _json
 import math as _m
 import random as _random_mod
@@ -26,26 +26,26 @@ from bpy_extras.object_utils import world_to_camera_view as _w2c
 
 _wrng = _random_mod.Random(2026)
 _WPARTS = set((os.environ.get("PC_WIDE") or "porch,house,left,yard,fence,trees,town,sky,door,rain,relight").split(","))
-_WNEW = []                                   # object mới, để kiểm tra có lọt vào khung gốc không
+_WNEW = []                                   # new objects, to check whether any leak into the base frame
 
-# ── kích thước chính của phần mở rộng ──
-PX0, PX1 = -2.62, 5.35        # mép trái / phải sàn hiên (sàn cũ: -1.4..2.6)
-CEIL_Z = 2.60                 # mặt dưới trần hiên
-BEAM_Z = 2.36                 # đáy dầm biên (trên cột)
-EAVE_Y = -0.92                # diềm mái trước (ngay trên đầu camera, y = -0.95)
+# ── main dimensions of the extension ──
+PX0, PX1 = -2.62, 5.35        # left / right edge of the porch floor (old floor: -1.4..2.6)
+CEIL_Z = 2.60                 # underside of the porch ceiling
+BEAM_Z = 2.36                 # bottom of the edge beam (on the posts)
+EAVE_Y = -0.92                # front fascia (right above the camera, y = -0.95)
 EAVE_X0, EAVE_X1 = -2.95, 5.68
-EAVE_Z = 2.80                 # mép trên diềm mái hiên
-POST_Y = FRONT_EDGE + 0.07    # hàng cột trước
-YARD_Z = -0.43                # mặt sân
-HOUSE_X1 = 16.0               # tường nhà kéo tới đây
-WALL_TOP = 5.6                # đỉnh tường tầng hai (mái chính bắt đầu)
+EAVE_Z = 2.80                 # top edge of the porch fascia
+POST_Y = FRONT_EDGE + 0.07    # front row of posts
+YARD_Z = -0.43                # yard surface
+HOUSE_X1 = 16.0               # house wall extends to here
+WALL_TOP = 5.6                # top of the second-floor wall (main roof starts)
 
 
 _ROOF_CAM_ONLY = os.environ.get("PC_ROOF_CAM_ONLY") == "1"
 
 
 def _cam_only(ob):
-    """(PC_ROOF_CAM_ONLY=1) Chỉ camera thấy: không đổ bóng, không chắn/không phản tia khuếch tán và bóng loáng."""
+    """(PC_ROOF_CAM_ONLY=1) Camera-only: no shadows, doesn't block/reflect diffuse or glossy rays."""
     if not _ROOF_CAM_ONLY:
         return ob
     ob.visible_shadow = False
@@ -64,7 +64,7 @@ def _wreg(ob, check=True):
 
 
 def _bx(name, x0, x1, y0, y1, z0, z1, mat, cam_only=False, check=True):
-    """Hộp theo toạ độ biên (dùng box() của build_scene: có bevel nhẹ)."""
+    """Box from bounding coordinates (uses build_scene's box(): light bevel)."""
     ob = box(name, (x1 - x0, y1 - y0, z1 - z0), ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), mat)
     if cam_only:
         _cam_only(ob)
@@ -94,7 +94,7 @@ def _bm_obj(name, bm, mat, smooth=False, cam_only=False, check=True):
 
 
 def _stretch(name, axis, lo, hi):
-    """Kéo dài mesh có sẵn (sàn, tường…) theo một trục mà không dời gốc object → texture theo toạ độ object giữ y chỗ cũ."""
+    """Stretch an existing mesh (floor, wall…) along one axis without moving the object origin → object-space textures stay put."""
     ob = _bpy.data.objects.get(name)
     if not ob:
         return
@@ -105,7 +105,7 @@ def _stretch(name, axis, lo, hi):
     old_lo, old_hi = min(cs), max(cs)
     for v in ob.data.vertices:
         c = v.co[i]
-        if c < mid and lo is not None:      # đỉnh phía thấp: dời cả cụm (giữ bevel) sang biên mới
+        if c < mid and lo is not None:      # low-side verts: move the whole cluster (keeping the bevel) to the new bound
             v.co[i] = c - old_lo + (lo - loc)
         elif c >= mid and hi is not None:
             v.co[i] = c - old_hi + (hi - loc)
@@ -114,7 +114,7 @@ def _stretch(name, axis, lo, hi):
 
 # ───────────────────────── node helper ─────────────────────────
 def _nm(nt, op, a, b=None, c=None, clamp=False):
-    """Node Math: a, b, c là socket hoặc số."""
+    """Math node: a, b, c are sockets or numbers."""
     n = nt.nodes.new("ShaderNodeMath")
     n.operation = op
     n.use_clamp = clamp
@@ -171,7 +171,7 @@ def _nramp(nt, fac, stops):
 
 
 def _emit_mat(name, color_socket_fn, strength):
-    """Vật liệu tự phát sáng của cảnh; node phát sáng tên "emit_env" (render_passes tắt ở pass ánh nến)."""
+    """Self-emissive scene material; the emission node is named "emit_env" (render_passes turns it off in the candlelight pass)."""
     m = _bpy.data.materials.new(name)
     m.use_nodes = True
     nt = m.node_tree
@@ -189,16 +189,16 @@ def _emit_mat(name, color_socket_fn, strength):
     return m
 
 
-# ───────────────────────── vật liệu ─────────────────────────
+# ───────────────────────── materials ─────────────────────────
 def _mat_beadboard():
-    """Ván ốp trần beadboard sơn xanh haint blue: rãnh mảnh mỗi 9 cm (ván chạy dọc trục y), sơn hơi loang."""
+    """Beadboard ceiling painted haint blue: thin groove every 9 cm (boards run along y), slightly patchy paint."""
     mb = MB("ceiling_beadboard")
     nt = mb.nt
     tc = mb.node("ShaderNodeTexCoord")
     sep = mb.node("ShaderNodeSeparateXYZ")
     mb.link(tc.outputs["Object"], sep.inputs[0])
     f = _nm(nt, "FRACT", _nm(nt, "DIVIDE", sep.outputs["X"], 0.089))
-    # g = 0 ở rãnh giữa hai ván, lên 1 cách rãnh 2,7 mm
+    # g = 0 in the groove between boards, reaches 1 at 2.7 mm from the groove
     edge = _nm(nt, "SUBTRACT", 0.5, _nm(nt, "ABSOLUTE", _nm(nt, "SUBTRACT", f, 0.5)))
     g = _nm(nt, "DIVIDE", edge, 0.03, clamp=True)
     nz = mb.noise(6.0, 4.0, tc.outputs["Object"])
@@ -211,7 +211,7 @@ def _mat_beadboard():
 
 
 def _mat_paint(name, color, rough=0.6, dirt=0.25, scale=3.0):
-    """Gỗ sơn cũ: màu sơn loang nhẹ theo noise (dầm, diềm, cột, hàng rào)."""
+    """Old painted wood: paint colour slightly patchy via noise (beams, fascia, posts, fence)."""
     mb = MB(name)
     tc = mb.node("ShaderNodeTexCoord")
     nz = mb.noise(scale, 6.0, tc.outputs["Object"], 0.6)
@@ -228,7 +228,7 @@ def _mat_paint(name, color, rough=0.6, dirt=0.25, scale=3.0):
 
 
 def _mat_shingle():
-    """Ngói bitum xám tối: hàng ngói theo z, lệch màu từng viên."""
+    """Dark grey asphalt shingles: rows along z, per-shingle colour variation."""
     mb = MB("roof_shingle")
     tc = mb.node("ShaderNodeTexCoord")
     nt = mb.nt
@@ -252,7 +252,7 @@ def _mat_metal(name, color, rough=0.35):
 
 
 def _mat_ground():
-    """Sân: cỏ úa xen đất, mảng to theo noise thấp tần, sần theo noise cao tần. Giữ tối như mặt đất cũ."""
+    """Yard: faded grass mixed with dirt, large patches from low-frequency noise, bumps from high-frequency noise. Kept as dark as the old ground."""
     mb = MB("yard_ground")
     nt = mb.nt
     tc = mb.node("ShaderNodeTexCoord")
@@ -264,25 +264,25 @@ def _mat_ground():
     bw = mb.node("ShaderNodeRGBToBW")
     mb.link(m, bw.inputs[0])
     col = _nmix(nt, bw.outputs[0], grass, dirt)
-    # lá khô lốm đốm
+    # scattered dry leaves
     leaf = mb.noise(40.0, 2.0, tc.outputs["Object"])
     lm = _nm(nt, "GREATER_THAN", leaf.outputs["Fac"], 0.66)
     col = _nmix(nt, _nm(nt, "MULTIPLY", lm, 0.55), col, hexc("#4a2a16"))
     mb.link(col, mb.bsdf.inputs["Base Color"])
-    mb.set(Roughness=0.95, Specular_IOR_Level=0.12)      # đỡ loá khi nhìn sượt mặt sân ở xa
+    mb.set(Roughness=0.95, Specular_IOR_Level=0.12)      # less glare when grazing the far yard
     blade = mb.noise(260.0, 2.0, tc.outputs["Object"])
     mb.bump(blade.outputs["Fac"], 0.5, 0.01)
     return mb.m
 
 
 def _mat_lattice():
-    """Tấm lưới mắt cáo che gầm hiên: thanh chéo hai chiều, khe tối."""
+    """Lattice panel covering the under-porch: diagonal slats both ways, dark gaps."""
     mb = MB("porch_lattice")
     nt = mb.nt
     tc = mb.node("ShaderNodeTexCoord")
     sep = mb.node("ShaderNodeSeparateXYZ")
     mb.link(tc.outputs["Object"], sep.inputs[0])
-    h = _nm(nt, "ADD", sep.outputs["X"], sep.outputs["Y"])        # mặt bên chạy theo x hoặc y: cộng cả hai
+    h = _nm(nt, "ADD", sep.outputs["X"], sep.outputs["Y"])        # side faces run along x or y: add both
     s1 = _nm(nt, "FRACT", _nm(nt, "DIVIDE", _nm(nt, "ADD", h, sep.outputs["Z"]), 0.075))
     s2 = _nm(nt, "FRACT", _nm(nt, "DIVIDE", _nm(nt, "SUBTRACT", h, sep.outputs["Z"]), 0.075))
     slat = _nm(nt, "MAXIMUM", _nm(nt, "LESS_THAN", s1, 0.32), _nm(nt, "LESS_THAN", s2, 0.32))
@@ -304,8 +304,8 @@ def _mat_bark():
 
 
 def _see_through(m):
-    """Kính cửa sổ có đèn thật phía sau: camera và tia phản chiếu thấy ảnh phòng (emit_env), còn tia khuếch tán / tia bóng
-    đi xuyên qua → đèn trong phòng rọi ra hiên qua khung + song cửa."""
+    """Window glass with a real light behind it: camera and reflection rays see the room image (emit_env), while diffuse / shadow rays
+    pass through → the room light shines onto the porch through the frame + muntins."""
     nt = m.node_tree
     out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     em = nt.nodes["emit_env"]
@@ -320,13 +320,13 @@ def _see_through(m):
 
 
 def _mat_window_glow(name="window_glow", strength=1.0):
-    """Cửa sổ nhà: ánh đèn vàng ấm mờ trong phòng, hai vạt rèm voan buộc túm hai bên + diềm rèm phía trên (procedural)."""
+    """House window: dim warm yellow room light, two voile curtain panels tied back at the sides + a valance on top (procedural)."""
     def build(nt):
         tc = nt.nodes.new("ShaderNodeTexCoord")
         sep = nt.nodes.new("ShaderNodeSeparateXYZ")
         nt.links.new(tc.outputs["Generated"], sep.inputs[0])
         u, v = sep.outputs["X"], sep.outputs["Z"]
-        # bề rộng vạt rèm theo chiều cao: túm lại ở v ≈ 0,45
+        # curtain panel width by height: gathered at v ≈ 0.45
         t = _nm(nt, "DIVIDE", _nm(nt, "SUBTRACT", v, 0.45), 0.13)
         pinch = _nm(nt, "EXPONENT", _nm(nt, "MULTIPLY", _nm(nt, "MULTIPLY", t, t), -1.0))
         cw = _nm(nt, "MULTIPLY_ADD", pinch, -0.13, 0.31)
@@ -334,14 +334,14 @@ def _mat_window_glow(name="window_glow", strength=1.0):
         right = _nm(nt, "GREATER_THAN", u, _nm(nt, "SUBTRACT", 1.0, cw))
         top = _nm(nt, "GREATER_THAN", v, 0.87)
         mask = _nm(nt, "MINIMUM", _nm(nt, "ADD", _nm(nt, "ADD", left, right), top), 1.0)
-        # nếp rèm: sóng theo u, lệch nhẹ theo noise
+        # curtain folds: waves along u, slightly offset by noise
         nz = nt.nodes.new("ShaderNodeTexNoise")
         nz.inputs["Scale"].default_value = 4.0
         nt.links.new(tc.outputs["Generated"], nz.inputs["Vector"])
         ph = _nm(nt, "MULTIPLY_ADD", u, 75.0, _nm(nt, "MULTIPLY", nz.outputs["Fac"], 4.0))
         fold = _nm(nt, "MULTIPLY_ADD", _nm(nt, "SINE", ph), 0.3, 0.7)
         curtain = _nramp(nt, fold, [(0.4, "#5a2c12"), (1.0, "#c8773a")])
-        # trong phòng: điểm sáng (đèn bàn) dưới bên trái, tối dần ra mép
+        # inside the room: bright spot (table lamp) lower left, darkening towards the edges
         cmb = nt.nodes.new("ShaderNodeCombineXYZ")
         nt.links.new(_nm(nt, "MULTIPLY", _nm(nt, "SUBTRACT", u, 0.38), 1.3), cmb.inputs["X"])
         nt.links.new(_nm(nt, "SUBTRACT", v, 0.3), cmb.inputs["Z"])
@@ -352,7 +352,7 @@ def _mat_window_glow(name="window_glow", strength=1.0):
 
 
 def _mat_clear_glass():
-    """Kính trong: gần như trong suốt với mọi tia, phản chiếu Fresnel nhẹ (thấy rèm voan + phòng thật phía sau)."""
+    """Clear glass: almost transparent to all rays, light Fresnel reflection (shows the voile curtain + real room behind)."""
     m = _bpy.data.materials.new("window_clear")
     m.use_nodes = True
     nt = m.node_tree
@@ -366,7 +366,7 @@ def _mat_clear_glass():
     fr.inputs["IOR"].default_value = 1.52
     geo = nt.nodes.new("ShaderNodeNewGeometry")
     mx = nt.nodes.new("ShaderNodeMixShader")
-    # chỉ mặt trước phản chiếu (mặt sau của tấm kính mỏng: Fresnel tính với IOR nghịch đảo → phản xạ toàn phần, kính đen)
+    # only the front face reflects (back face of a thin pane: Fresnel with inverted IOR → total reflection, black glass)
     nt.links.new(_nm(nt, "MULTIPLY", fr.outputs[0], _nm(nt, "SUBTRACT", 1.0, geo.outputs["Backfacing"])), mx.inputs[0])
     nt.links.new(tr.outputs[0], mx.inputs[1])
     nt.links.new(gl.outputs[0], mx.inputs[2])
@@ -375,46 +375,46 @@ def _mat_clear_glass():
 
 
 def _mat_window_dark():
-    """Kính cửa sổ tắt đèn: đen xanh, phản chiếu nhẹ."""
+    """Unlit window glass: blue-black, faint reflection."""
     return mat_simple("window_dark", "#06080e", 0.08, Specular_IOR_Level=0.6)
 
 
-# ───────────────────────── 1. hiên: sàn, cột, dầm, trần, mái, máng xối ─────────────────────────
+# ───────────────────────── 1. porch: floor, posts, beams, ceiling, roof, gutter ─────────────────────────
 def _porch():
-    # sàn, dầm mép, bậc trước kéo dài sang hai bên (giữ gốc object → vân gỗ phần cũ không đổi)
+    # floor, rim joist, front step extended to both sides (keeping the object origin → wood grain on the old part unchanged)
     for n in ("floor", "joist", "step2", "step2_riser"):
         _stretch(n, "x", PX0, PX1)
     paint = _mat_paint("porch_paint", "#bdb6a6", 0.6, 0.3)
     beam_paint = _mat_paint("beam_paint", "#b4ad9c", 0.65, 0.35)
-    # cột hiên hàng trước: trái, giữa (ngoài khung gốc, ngang camera), phải; đế + mũ cột
+    # front-row porch posts: left, middle (outside the base frame, level with the camera), right; base + cap
     posts = [(-2.5, POST_Y), (2.6, POST_Y), (PX1 - 0.12, POST_Y), (PX1 - 0.12, RAIL_Y)]
     for i, (x, y) in enumerate(posts):
         _bx(f"post_{i}", x - 0.06, x + 0.06, y - 0.06, y + 0.06, 0.0, BEAM_Z, paint)
         _bx(f"post_{i}_base", x - 0.085, x + 0.085, y - 0.085, y + 0.085, 0.0, 0.16, paint)
         _bx(f"post_{i}_cap", x - 0.085, x + 0.085, y - 0.085, y + 0.085, BEAM_Z - 0.06, BEAM_Z, paint)
-    # dầm biên trên cột (trước, trái, phải, sau phía lan can), dầm ngang dưới trần
+    # edge beams on the posts (front, left, right, back on the railing side), cross beams under the ceiling
     _bx("beam_front", PX0 + 0.04, PX1 - 0.04, POST_Y - 0.07, POST_Y + 0.07, BEAM_Z, CEIL_Z, beam_paint, True)
     _bx("beam_left", -2.57, -2.43, FRONT_EDGE, RAIL_Y + 0.06, BEAM_Z, CEIL_Z, beam_paint, True)
     _bx("beam_right", PX1 - 0.19, PX1 - 0.05, FRONT_EDGE, WALL_Y, BEAM_Z, CEIL_Z, beam_paint, True)
     _bx("beam_back", -2.5, WALL_X0, RAIL_Y - 0.06, RAIL_Y + 0.06, BEAM_Z, CEIL_Z, beam_paint, True)
     for i, x in enumerate((WALL_X0, 2.6)):
         _bx(f"beam_cross{i}", x - 0.06, x + 0.06, POST_Y, WALL_Y, CEIL_Z - 0.16, CEIL_Z, beam_paint, True)
-    # gờ chỉ góc trần – tường
+    # crown moulding at the ceiling–wall corner
     _bx("crown", WALL_X0, PX1 - 0.19, WALL_Y - 0.05, WALL_Y, CEIL_Z - 0.07, CEIL_Z, paint, True)
-    # trần ván ốp
+    # beadboard ceiling
     bm = _bmesh.new()
     _bm_box(bm, PX0, PX1, FRONT_EDGE - 0.02, WALL_Y, CEIL_Z, CEIL_Z + 0.02)
     _bm_obj("ceiling", bm, _mat_beadboard(), cam_only=True)
-    # sofit (mặt dưới phần mái đua) cao hơn trần một chút, phủ tới diềm
+    # soffit (underside of the overhang) slightly above the ceiling, reaching the fascia
     bm = _bmesh.new()
     _bm_box(bm, EAVE_X0, EAVE_X1, EAVE_Y, WALL_Y, CEIL_Z + 0.03, CEIL_Z + 0.05)
     _bm_obj("soffit", bm, beam_paint, cam_only=True)
-    # diềm mái (fascia) ba phía
+    # fascia on three sides
     fz0, fz1 = CEIL_Z - 0.02, EAVE_Z
     _bx("fascia_front", EAVE_X0, EAVE_X1, EAVE_Y - 0.025, EAVE_Y, fz0, fz1, paint, True)
     _bx("fascia_left", EAVE_X0 - 0.025, EAVE_X0, EAVE_Y - 0.025, WALL_Y, fz0, fz1, paint, True)
     _bx("fascia_right", EAVE_X1, EAVE_X1 + 0.025, EAVE_Y - 0.025, WALL_Y, fz0, fz1, paint, True)
-    # mái hiên kiểu mái chóp tựa vào tường: mặt trước + hai mặt hồi tam giác
+    # hip-style porch roof against the wall: front slope + two triangular end slopes
     rise = 0.27
     zt = EAVE_Z + (WALL_Y - EAVE_Y) * rise
     xl, xr = EAVE_X0 + (WALL_Y - EAVE_Y), EAVE_X1 - (WALL_Y - EAVE_Y)
@@ -425,32 +425,32 @@ def _porch():
     for f in ((A, B, F, E), (D, A, E), (B, C, F)):
         bm.faces.new(f)
     _bm_obj("porch_roof", bm, _mat_shingle(), cam_only=True)
-    # máng xối bán nguyệt ngoài diềm + ống thoát nước ở góc sau bên phải (áp vào tường)
+    # half-round gutter outside the fascia + downspout at the back right corner (against the wall)
     gut = _mat_metal("gutter", "#3a3632", 0.4)
     _gutter("gutter_front", _V((EAVE_X0 - 0.09, EAVE_Y - 0.09, EAVE_Z - 0.02)), _V((EAVE_X1 + 0.09, EAVE_Y - 0.09, EAVE_Z - 0.02)), gut)
     _gutter("gutter_left", _V((EAVE_X0 - 0.09, WALL_Y - 0.02, EAVE_Z - 0.02)), _V((EAVE_X0 - 0.09, EAVE_Y - 0.09, EAVE_Z - 0.02)), gut)
     _gutter("gutter_right", _V((EAVE_X1 + 0.09, EAVE_Y - 0.09, EAVE_Z - 0.02)), _V((EAVE_X1 + 0.09, WALL_Y - 0.02, EAVE_Z - 0.02)), gut)
-    for nm_, x in (("downspout_right", EAVE_X1 + 0.09),):                 # góc phải, áp vào tường nhà
+    for nm_, x in (("downspout_right", EAVE_X1 + 0.09),):                 # right corner, against the house wall
         bm = _bmesh.new()
         y = WALL_Y - 0.12
         _bm_box(bm, x - 0.035, x + 0.035, y - 0.028, y + 0.028, YARD_Z + 0.12, EAVE_Z - 0.08)
         _bm_box(bm, x - 0.035, x + 0.035, y - 0.03, y + 0.03, EAVE_Z - 0.12, EAVE_Z - 0.02)
-        _bm_box(bm, x - 0.035, x + 0.035, y - 0.24, y + 0.028, YARD_Z + 0.04, YARD_Z + 0.12)      # khuỷu xả ra sân
+        _bm_box(bm, x - 0.035, x + 0.035, y - 0.24, y + 0.028, YARD_Z + 0.04, YARD_Z + 0.12)      # elbow draining into the yard
         _bm_obj(nm_, bm, gut)
-    # tấm mắt cáo che gầm hiên hai đầu
+    # lattice panels covering the under-porch at both ends
     lat = _mat_lattice()
     _bx("skirt_left_a", PX0 - 0.02, PX0, 0.42, WALL_Y, YARD_Z, -0.04, lat)
     _bx("skirt_right", PX1, PX1 + 0.02, FRONT_EDGE, WALL_Y, YARD_Z, -0.04, lat)
     _bx("skirt_trim_right", PX1, PX1 + 0.03, FRONT_EDGE, WALL_Y, -0.08, -0.035, paint)
-    # lan can đầu phải (từ cột trước tới cột sát tường)
+    # right-end railing (from the front post to the post by the wall)
     _railing("rail_right", _V((PX1 - 0.12, POST_Y + 0.08, 0)), _V((PX1 - 0.12, RAIL_Y - 0.08, 0)), paint)
-    # lá khô rơi thêm trên phần sàn mới
+    # extra dry leaves on the new floor area
     _more_leaves()
     print("WIDE porch")
 
 
 def _gutter(name, a, b, mat):
-    """Máng xối bán nguyệt có mép cuộn: profile chữ U quét theo đoạn a→b, bịt hai đầu."""
+    """Half-round gutter with a rolled lip: U profile swept along a→b, both ends capped."""
     d = (b - a)
     L = d.length
     t = d.normalized()
@@ -458,7 +458,7 @@ def _gutter(name, a, b, mat):
     up = _V((0, 0, 1))
     r = 0.065
     prof = []
-    for k in range(13):                                # nửa vòng tròn mở lên trên
+    for k in range(13):                                # half circle open upwards
         ang = _m.pi + _m.pi * k / 12
         prof.append((r * _m.cos(ang), r * _m.sin(ang) + r * 0.0))
     prof = [(-r - 0.008, 0.012)] + prof + [(r + 0.008, 0.012)]
@@ -469,7 +469,7 @@ def _gutter(name, a, b, mat):
     n = len(prof)
     for i in range(n - 1):
         bm.faces.new((rings[0][i], rings[0][i + 1], rings[1][i + 1], rings[1][i]))
-    for ring in rings:                                 # nắp đầu
+    for ring in rings:                                 # end caps
         bm.faces.new(ring)
     ob = _bm_obj(name, bm, mat, smooth=True, cam_only=True)
     sol = ob.modifiers.new("solid", "SOLIDIFY")
@@ -478,7 +478,7 @@ def _gutter(name, a, b, mat):
 
 
 def _railing(name, a, b, mat, top=0.86, bot=0.08, spacing=0.12):
-    """Lan can thẳng a→b (z của a, b bỏ qua): tay vịn, thanh dưới, con tiện vuông."""
+    """Straight railing a→b (z of a, b ignored): handrail, bottom rail, square balusters."""
     d = b - a
     d.z = 0
     L = d.length
@@ -506,7 +506,7 @@ def _railing(name, a, b, mat, top=0.86, bot=0.08, spacing=0.12):
 
 
 def _more_leaves():
-    """Rải thêm lá khô (dùng _add_leaf + vật liệu 'leaf' của porch_details nếu có) lên sàn mới và bậc trái."""
+    """Scatter extra dry leaves (using porch_details' _add_leaf + 'leaf' material if present) on the new floor and left steps."""
     if "_add_leaf" not in globals() or not _bpy.data.materials.get("leaf"):
         return
     bm = _bmesh.new()
@@ -528,9 +528,9 @@ def _more_leaves():
     _bm_obj("porch_leaves_wide", bm, _bpy.data.materials["leaf"], smooth=True)
 
 
-# ───────────────────────── 2. nhà: tường kéo dài, cửa sổ, tầng hai, mái chính ─────────────────────────
+# ───────────────────────── 2. house: extended wall, windows, second floor, main roof ─────────────────────────
 def _window(name, x0, x1, z0, z1, mat, rail=True):
-    """Cửa sổ trên mặt tường y = WALL_Y: khung nẹp, bậu, kính (vật liệu mat), song chia ô."""
+    """Window on the wall y = WALL_Y: casing, sill, glass (material mat), muntins."""
     paint = _bpy.data.materials.get("porch_paint") or M_TRIM
     y = WALL_Y
     _bx(f"{name}_glass", x0, x1, y - 0.012, y - 0.002, z0, z1, mat)
@@ -542,7 +542,7 @@ def _window(name, x0, x1, z0, z1, mat, rail=True):
     if rail:
         bm = _bmesh.new()
         zm = (z0 + z1) / 2
-        _bm_box(bm, x0, x1, y - 0.03, y - 0.005, zm - 0.022, zm + 0.022)               # thanh ngang giữa (cửa sổ lùa)
+        _bm_box(bm, x0, x1, y - 0.03, y - 0.005, zm - 0.022, zm + 0.022)               # middle rail (sash window)
         for z in ((z0 + zm) / 2, (zm + z1) / 2):
             _bm_box(bm, x0, x1, y - 0.024, y - 0.008, z - 0.011, z + 0.011)
         xm = (x0 + x1) / 2
@@ -556,12 +556,12 @@ WINDOW_LAMP_W = 260.0
 
 
 def _cut_wall(name, x0, x1, z0, z1):
-    """Khoét lỗ chữ nhật xuyên tường nhà (boolean áp thẳng vào mesh)."""
+    """Cut a rectangular hole through the house wall (boolean applied directly to the mesh)."""
     wall = _bpy.data.objects["wall"]
     cut = _bpy.data.meshes.new(name + "_cut")
     bm = _bmesh.new()
     _bm_box(bm, x0, x1, WALL_Y - 0.05, WALL_Y + 0.2, z0, z1)
-    for v in bm.verts:                                # toạ độ cục bộ của tường
+    for v in bm.verts:                                # wall local coordinates
         v.co = wall.matrix_world.inverted() @ v.co
     bm.to_mesh(cut)
     bm.free()
@@ -577,7 +577,7 @@ def _cut_wall(name, x0, x1, z0, z1):
 
 
 def _voile(name, x0, x1, z0, z1, y=WALL_Y + 0.055, n=None):
-    """Rèm voan nếp sóng dọc sát sau kính (vật liệu sheer_voile của _window_light)."""
+    """Voile curtain with vertical wave folds right behind the glass (sheer_voile material from _window_light)."""
     bm = _bmesh.new()
     nx_ = n or max(8, int((x1 - x0) * 110))
     grid = [[bm.verts.new((x0 + (x1 - x0) * i / nx_, y + 0.012 * _m.sin(i * 0.9) + 0.006 * _m.sin(i * 0.37 + 1.0),
@@ -589,11 +589,11 @@ def _voile(name, x0, x1, z0, z1, y=WALL_Y + 0.055, n=None):
 
 
 def _window_light(name, x0, x1, z0, z1):
-    """Đèn thật trong phòng sau cửa sổ hiên: khoét lỗ tường đúng ô kính, rèm vải mỏng hai bên + diềm (chỉ để tạo bóng),
-    đèn trần ấm trong phòng → vệt sáng hình cửa sổ có bóng song/khung đổ xuống sàn hiên, hắt nhẹ lên tường/lan can.
-    render_passes bật nó ở mọi pass có ánh sáng môi trường (lit + dark), tắt ở pass ánh nến."""
+    """Real light in the room behind the porch window: cut a wall hole matching the glass, thin curtains at the sides + valance (just for shadows),
+    warm ceiling light in the room → a window-shaped light patch with muntin/frame shadows on the porch floor, faint bounce onto the wall/railing.
+    render_passes turns it on in every pass with ambient light (lit + dark), off in the candlelight pass."""
     _cut_wall(name, x0 + 0.002, x1 - 0.002, z0 + 0.002, z1 - 0.002)
-    # rèm vải dày hai bên (túm ở giữa chiều cao) + diềm: dệt thô màu nghệ, sáng xuyên ít
+    # heavy curtains at the sides (gathered at mid-height) + valance: coarse turmeric-coloured weave, little light through
     cm = MB("curtain_cloth")
     tl = cm.node("ShaderNodeBsdfTranslucent")
     tl.inputs["Color"].default_value = hexc("#b0602a")
@@ -627,11 +627,11 @@ def _window_light(name, x0, x1, z0, z1):
             prev = row
     _bm_box(bm, x0 - 0.05, x1 + 0.05, yc - 0.002, yc + 0.002, z0 + 0.87 * (z1 - z0), z1 + 0.05)
     cur = _bm_obj(name + "_curtains", bm, cm.m, check=False)
-    # nếp vải dọc cho rèm dày
+    # vertical folds for the heavy curtains
     for v in cur.data.vertices:
         v.co.y += 0.025 * _m.sin(v.co.x * 55.0)
     cur.data.update()
-    # rèm voan phủ cả ô cửa, sát kính: nếp sóng dọc, sáng ấm xuyên qua (đèn trong phòng rọi từ phía sau)
+    # voile curtain covering the whole opening, against the glass: vertical wave folds, warm light through (room light from behind)
     vm = MB("sheer_voile")
     tl = vm.node("ShaderNodeBsdfTranslucent")
     tl.inputs["Color"].default_value = hexc("#f2d2a4")
@@ -649,8 +649,8 @@ def _window_light(name, x0, x1, z0, z1):
     vm.link(tp.outputs[0], mx2.inputs[2])
     vm.link(mx2.outputs[0], vm.out.inputs["Surface"])
     _voile(name + "_voile", x0 - 0.04, x1 + 0.04, z0 - 0.02, z1 + 0.02, n=120)
-    # phòng trong (hộp quay mặt vào trong): tường be ấm, sàn gỗ, trần; + một chao đèn bàn cho chiều sâu sau rèm
-    rx0, rx1, ry1, rz1 = DX0 - 0.3, x1 + 1.0, WALL_Y + 3.2, 2.7          # phòng kéo sang trái tới sau cửa ra vào
+    # inner room (inward-facing box): warm beige walls, wood floor, ceiling; + a table lamp shade for depth behind the curtain
+    rx0, rx1, ry1, rz1 = DX0 - 0.3, x1 + 1.0, WALL_Y + 3.2, 2.7          # room extends left to behind the front door
     wall_m = mat_simple("room_wall", "#c9a77e", 0.9)
     floor_m = mat_simple("room_floor", "#5a3a22", 0.6)
     bm = _bmesh.new()
@@ -663,7 +663,7 @@ def _window_light(name, x0, x1, z0, z1):
                  ((rx1, yb, 0), (rx1, ry1, 0), (rx1, ry1, rz1), (rx1, yb, rz1))):
         bm.faces.new([P(*c) for c in quad])
     _bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    _bmesh.ops.reverse_faces(bm, faces=bm.faces)                 # pháp tuyến quay vào trong
+    _bmesh.ops.reverse_faces(bm, faces=bm.faces)                 # normals face inwards
     room = _bm_obj(name + "_room", bm, wall_m, check=False)
     room.data.materials.append(floor_m)
     for f in room.data.polygons:
@@ -685,14 +685,14 @@ def _window_light(name, x0, x1, z0, z1):
                mat_simple("lamp_base", "#2a2018", 0.5), (x0 + 0.25, WALL_Y + 1.1, 0.0), seg=20, check=False)
     lamp_in = light(name + "_tablelamp", "POINT", 25.0, "#ffb060", (x0 + 0.25, WALL_Y + 1.1, 1.2), shadow_soft_size=0.06)
     lamp_in.visible_camera = False
-    # đèn trần trong phòng (bóng đèn nhỏ → bóng song/khung cửa đủ nét), sâu 1,6 m sau cửa sổ, cao 2,6 m: ô kính dưới +
-    # thanh giữa in thành vệt sáng hình thang trên sàn hiên (y ≈ 0,8 → mép trước). Đèn spot để không lọt sáng ngoài ô cửa.
+    # room ceiling light (small bulb → muntin/frame shadows sharp enough), 1.6 m behind the window, 2.6 m high: lower pane +
+    # middle rail cast a trapezoid light patch on the porch floor (y ≈ 0.8 → front edge). Spot light so nothing leaks outside the opening.
     xc = (x0 + x1) / 2
     lamp = light(name + "_lamp", "SPOT", WINDOW_LAMP_W, "#ffb468", (xc, WALL_Y + 1.6, 2.6), shadow_soft_size=0.035,
                  spot_size=rad(80), spot_blend=0.25)
     lamp.rotation_euler = (_V((xc, WALL_Y, (z0 + z1) / 2 - 0.15)) - lamp.location).to_track_quat("-Z", "Y").to_euler()
     lamp.visible_camera = False
-    # ánh rèm voan: dải sáng rất dịu ngay sau kính, chúc xuống → quầng mềm trên bậu + sàn sát tường
+    # voile glow: very soft light strip right behind the glass, pointing down → soft halo on the sill + floor by the wall
     soft = light(name + "_soft", "AREA", 2.5, "#ffae5c", (xc, WALL_Y + 0.15, (z0 + z1) / 2), size=W_ * 0.8,
                  size_y=(z1 - z0) * 0.8, shape="RECTANGLE")
     soft.rotation_euler = _V((0, -1, -0.6)).to_track_quat("-Z", "Y").to_euler()
@@ -700,12 +700,12 @@ def _window_light(name, x0, x1, z0, z1):
 
 
 def _house():
-    # tường ván ốp: kéo dài sang phải tới HOUSE_X1, lên tới hết tầng hai, xuống tới mặt sân (ngoài phạm vi hiên)
+    # siding wall: extended right to HOUSE_X1, up through the second floor, down to the yard (outside the porch)
     _stretch("wall", "x", None, HOUSE_X1)
     _stretch("wall", "z", YARD_Z, WALL_TOP)
     paint = _bpy.data.materials.get("porch_paint") or M_TRIM
     _bx("house_corner_r", HOUSE_X1 - 0.12, HOUSE_X1, WALL_Y - 0.03, WALL_Y + 0.03, YARD_Z, WALL_TOP, paint)
-    # móng đá chân tường ngoài phạm vi hiên
+    # stone foundation at the wall base outside the porch
     stone = MB("foundation")
     tcs = stone.node("ShaderNodeTexCoord")
     vor = stone.node("ShaderNodeTexVoronoi")
@@ -715,19 +715,19 @@ def _house():
     stone.set(Roughness=0.9)
     stone.bump(vor.outputs["Distance"], 0.5)
     _bx("foundation", PX1 + 0.02, HOUSE_X1, WALL_Y - 0.06, WALL_Y, YARD_Z - 0.02, 0.0, stone.m)
-    # cửa sổ tầng trệt dưới hiên (sau cửa ra vào) + ngoài hiên; tầng hai: vài ô sáng mờ
+    # ground-floor windows under the porch (past the front door) + beyond the porch; second floor: a few dimly lit panes
     glow = _see_through(_mat_window_glow("window_glow", 1.0))
     clear = _mat_clear_glass()
     glow_dim = _mat_window_glow("window_glow_dim", 0.45)
     dark = _mat_window_dark()
-    _window("window_porch", 2.05, 3.15, 0.85, 2.05, clear)        # kính thật: thấy rèm voan + phòng phía sau
+    _window("window_porch", 2.05, 3.15, 0.85, 2.05, clear)        # real glass: shows the voile curtain + room behind
     _window("window_side1", 7.0, 8.1, 0.85, 2.05, dark)
     _window("window_side2", 10.4, 11.5, 0.85, 2.05, glow_dim)
     _window("window_side3", 13.6, 14.7, 0.85, 2.05, dark)
     for i, (x, m_) in enumerate(((0.3, dark), (2.6, glow_dim), (5.3, dark), (7.55, dark), (10.95, glow_dim), (14.15, dark))):
         _window(f"window_up{i}", x - 0.5, x + 0.5, 3.75, 4.95, m_)
     _window_light("window_porch", 2.05, 3.15, 0.85, 2.05)
-    # mái chính phía trên tầng hai: sofit, diềm, máng xối, mặt mái (chỉ camera thấy)
+    # main roof above the second floor: soffit, fascia, gutter, roof surface (camera-only)
     ey, ez = WALL_Y - 0.45, WALL_TOP + 0.2
     _bx("main_soffit", WALL_X0 - 0.45, HOUSE_X1 + 0.45, ey, WALL_Y, WALL_TOP - 0.02, WALL_TOP, paint, True)
     _bx("main_fascia", WALL_X0 - 0.45, HOUSE_X1 + 0.45, ey - 0.025, ey, WALL_TOP - 0.04, ez, paint, True)
@@ -742,16 +742,16 @@ def _house():
     print("WIDE house")
 
 
-# ───────────────────────── 3. đầu trái: lan can hông, cột góc, bậc xuống sân ─────────────────────────
+# ───────────────────────── 3. left end: side railing, corner post, steps down to the yard ─────────────────────────
 def _left():
     paint = _bpy.data.materials.get("porch_paint") or M_TRIM
     x = -2.5
-    # lan can hông từ cột góc sau (porch_post_far) ra tới trụ cầu thang
+    # side railing from the back corner post (porch_post_far) out to the newel
     _railing("rail_left", _V((x, RAIL_Y - 0.06, 0)), _V((x, 0.5, 0)), paint)
-    # trụ đầu cầu thang (newel) có mũ
+    # newel post with cap
     _bx("newel_left", x - 0.06, x + 0.06, 0.39, 0.51, 0.0, 1.0, paint)
     _bx("newel_left_cap", x - 0.08, x + 0.08, 0.37, 0.53, 1.0, 1.04, paint)
-    # bậc xuống sân (hai bậc + đá kê), mỗi bậc là khối đặc tới mặt sân
+    # steps down to the yard (two steps + a stone block), each step a solid block down to the yard
     y0, y1 = POST_Y + 0.08, 0.39
     steps = [(PX0 - 0.30, PX0, -0.143), (PX0 - 0.60, PX0 - 0.30, -0.286)]
     for i, (a, b, ztop) in enumerate(steps):
@@ -759,7 +759,7 @@ def _left():
         _bx(f"lstep{i}_tread", a - 0.02, b, y0 - 0.02, y1 + 0.02, ztop - 0.035, ztop, M_STEP)
     _bx("lstep_stone", PX0 - 0.95, PX0 - 0.6, y0 + 0.05, y1 - 0.05, YARD_Z - 0.02, YARD_Z + 0.025,
         mat_simple("stone_pad", "#4a4a50", 0.85))
-    # má cầu thang hai bên (dầm xiên đơn giản)
+    # stair stringers on both sides (simple sloped beams)
     for i, yy in enumerate((y0 - 0.04, y1 + 0.04)):
         bm = _bmesh.new()
         prof = [(PX0, 0.0), (PX0, YARD_Z), (PX0 - 0.62, YARD_Z), (PX0 - 0.62, YARD_Z + 0.06)]
@@ -770,7 +770,7 @@ def _left():
         for k in range(n):
             bm.faces.new((vs[k], vs[(k + 1) % n], vs[n + (k + 1) % n], vs[n + k]))
         _bm_obj(f"lstep_stringer{i}", bm, paint)
-    # đá lát lối đi từ chân bậc ra cổng rào
+    # stepping stones from the foot of the steps to the fence gate
     sm = mat_simple("path_stone", "#3c3c42", 0.9)
     bm = _bmesh.new()
     for k in range(6):
@@ -788,11 +788,11 @@ def _left():
     print("WIDE left")
 
 
-# ───────────────────────── 4. sân ─────────────────────────
+# ───────────────────────── 4. yard ─────────────────────────
 def _yard():
     yd = _bpy.data.objects.get("yard")
     if yd:
-        # rộng hơn để chân trời hai bên xa hơn (phía trước bị phông trời phẳng che từ 30 m như cũ)
+        # wider so the horizon on both sides is farther (the front is covered by the flat sky backdrop from 30 m as before)
         _stretch("yard", "x", -90.0, 90.0)
         _stretch("yard", "y", -60.0, 95.0)
         yd.data.materials.clear()
@@ -800,7 +800,7 @@ def _yard():
     print("WIDE yard")
 
 
-# ───────────────────────── 5. hàng rào cọc nhọn ─────────────────────────
+# ───────────────────────── 5. picket fence ─────────────────────────
 def _fence():
     m_ = _mat_paint("fence_paint", "#a39d90", 0.75, 0.55, 1.5)
     bm = _bmesh.new()
@@ -812,7 +812,7 @@ def _fence():
         t = (b - a).normalized()
         nrm = _V((-t.y, t.x, 0))
         along_x = abs(t.x) > 0.5
-        # cột rào mỗi ~2 m
+        # fence post every ~2 m
         npost = max(1, round(L / 2.0))
         for k in range(npost + 1):
             p = a + t * (L * k / npost)
@@ -824,13 +824,13 @@ def _fence():
                 _bm_box(bm, min(a.x, b.x), max(a.x, b.x), a.y + 0.03, a.y + 0.065, z0 + zz - 0.035, z0 + zz + 0.035)
             else:
                 _bm_box(bm, a.x - 0.065, a.x - 0.03, min(a.y, b.y), max(a.y, b.y), z0 + zz - 0.035, z0 + zz + 0.035)
-        # cọc nhọn phía ngoài thanh ngang, cao thấp lệch nhẹ, hơi nghiêng như rào cũ
+        # pickets outside the rails, slightly uneven heights, a bit tilted like an old fence
         k = 0.07
         while k < L - 0.05:
             p = a + t * k
             h = 0.92 + _wrng.uniform(-0.02, 0.02)
             w, th = 0.075, 0.02
-            off = _V((0, 0.085, 0)) if along_x else _V((-0.085, 0, 0))     # phía ngoài thanh ngang
+            off = _V((0, 0.085, 0)) if along_x else _V((-0.085, 0, 0))     # outside the rails
             c = p + off
             lean = _wrng.uniform(-0.025, 0.025)
             pts2 = [(-w / 2, 0.0), (w / 2, 0.0), (w / 2, h - 0.06), (0.0, h), (-w / 2, h - 0.06)]
@@ -845,7 +845,7 @@ def _fence():
                 bm.faces.new((ring0[i], ring0[(i + 1) % 5], ring1[(i + 1) % 5], ring1[i]))
             k += 0.13 + _wrng.uniform(-0.006, 0.006)
     _bm_obj("picket_fence", bm, m_)
-    # hai trụ cổng có quả cầu
+    # two gate posts with ball finials
     bm = _bmesh.new()
     for y in (-0.6, 0.6):
         _bm_box(bm, -7.27, -7.13, y - 0.07, y + 0.07, z0 - 0.05, z0 + 1.2)
@@ -855,7 +855,7 @@ def _fence():
     print("WIDE fence")
 
 
-# ───────────────────────── 6. cây trụi lá ─────────────────────────
+# ───────────────────────── 6. bare trees ─────────────────────────
 def _tree(name, base, height, seed, maxd=5):
     rng = _random_mod.Random(seed)
     cu = _bpy.data.curves.new(name, "CURVE")
@@ -908,7 +908,7 @@ def _tree(name, base, height, seed, maxd=5):
 
 def _trees():
     _mat_bark()
-    spots = [  # (x, y, cao, seed) — tất cả ở bên trái, ngoài cửa sổ lan can của khung gốc
+    spots = [  # (x, y, height, seed) — all on the left, outside the railing window of the base frame
         (-8.6, 5.2, 7.5, 11), (-9.8, 1.8, 8.5, 12), (-14.5, 15.0, 9.5, 13), (-20.0, 8.0, 10.5, 14),
         (-4.6, -2.8, 6.5, 15), (-24.0, 21.0, 11.0, 16), (-13.0, -3.5, 8.0, 17),
     ]
@@ -919,10 +919,10 @@ def _trees():
     print("WIDE trees", len(spots), "branches", tot)
 
 
-# ───────────────────────── 7. nhà xa có cửa sổ sáng ─────────────────────────
+# ───────────────────────── 7. distant houses with lit windows ─────────────────────────
 def _far_house(i, cx, cy, w, d, h, wall_col, lit_pattern, yaw_jitter=0.0):
     to_cam = _V((CAM_LOC.x - cx, CAM_LOC.y - cy, 0)).normalized()
-    yaw = _m.atan2(to_cam.x, -to_cam.y) + yaw_jitter        # mặt trước (−y cục bộ) quay về phía hiên
+    yaw = _m.atan2(to_cam.x, -to_cam.y) + yaw_jitter        # front face (local −y) turned towards the porch
     R_ = _Mx.Rotation(yaw, 3, "Z")
     o = _V((cx, cy, YARD_Z))
     roof_h = w * 0.38
@@ -930,7 +930,7 @@ def _far_house(i, cx, cy, w, d, h, wall_col, lit_pattern, yaw_jitter=0.0):
     def P(x, y, z):
         return o + R_ @ _V((x, y, z))
 
-    bm = _bmesh.new()                                  # thân nhà + đầu hồi
+    bm = _bmesh.new()                                  # house body + gable
     hw, hd = w / 2, d / 2
     vb = [bm.verts.new(P(x, y, 0)) for x, y in ((-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd))]
     vt = [bm.verts.new(P(x, y, h)) for x, y in ((-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd))]
@@ -940,7 +940,7 @@ def _far_house(i, cx, cy, w, d, h, wall_col, lit_pattern, yaw_jitter=0.0):
     bm.faces.new((vt[3], vt[0], gl))
     bm.faces.new((vt[1], vt[2], gr))
     _bm_obj(f"far_house{i}", bm, mat_simple(f"far_wall{i}", wall_col, 0.85))
-    bm = _bmesh.new()                                  # mái hai mái có đua + ống khói
+    bm = _bmesh.new()                                  # gable roof with overhang + chimney
     ov = 0.35
     e0 = [P(-hw - ov, -hd - ov, h - ov * 0.7), P(hw + ov, -hd - ov, h - ov * 0.7)]
     e1 = [P(-hw - ov, hd + ov, h - ov * 0.7), P(hw + ov, hd + ov, h - ov * 0.7)]
@@ -953,7 +953,7 @@ def _far_house(i, cx, cy, w, d, h, wall_col, lit_pattern, yaw_jitter=0.0):
     for v in _bm_box(bm, cx_ - 0.35, cx_ + 0.35, 0.3, 0.9, h, h + roof_h + 0.9):
         v.co = o + R_ @ v.co
     _bm_obj(f"far_roof{i}", bm, _bpy.data.materials.get("roof_shingle") or _mat_shingle())
-    # cửa sổ: hai tầng trên mặt trước, một cột trên mặt hồi phía camera thấy
+    # windows: two floors on the front face, one column on the gable end the camera sees
     lit_m, dark_m = _bpy.data.materials["far_window_lit"], _bpy.data.materials["window_dark"]
     side = 1 if (R_.inverted() @ _V((CAM_LOC.x - cx, CAM_LOC.y - cy, 0))).x > 0 else -1
     wins = []
@@ -985,7 +985,7 @@ def _town():
     _emit_mat("far_window_lit", lambda nt: hexc("#ffb257"), 3.2)
     if not _bpy.data.materials.get("roof_shingle"):
         _mat_shingle()
-    # (x, y, rộng, sâu, cao, màu tường, mẫu cửa sổ sáng) — đều nằm ngoài cửa sổ lan can của khung gốc
+    # (x, y, width, depth, height, wall colour, lit-window pattern) — all outside the railing window of the base frame
     _far_house(0, -16.5, 21.0, 7.0, 6.0, 5.2, "#39404f", "1001101", 0.25)
     _far_house(1, -26.0, 13.0, 8.0, 6.5, 5.6, "#4a3d35", "0110011", -0.2)
     _far_house(2, -28.0, -2.0, 6.5, 6.0, 3.6, "#33403c", "101", 0.3)
@@ -993,24 +993,24 @@ def _town():
     print("WIDE town")
 
 
-# ───────────────────────── 8. bầu trời toàn cảnh ─────────────────────────
-# Ảnh trời "level" dạng equirect: lon ∈ [-180, 180] (0 = hướng ngang của camera gốc, dương = sang phải),
-# lat ∈ [SKY_LAT0, 90]. Dựng một lần bằng numpy rồi cache ở blender/textures/sky_pano.jpg:
-#   - nền: tranh trời Codex (raw/sky_pano_raw.png, không có trăng) trải lon [-140, 10], soi gương ra phần còn lại
-#     (trục gương lon 10° nằm sau tường nhà/trần hiên nên không lộ),
-#     đường chân trời của tranh đặt ở SKY_HOR°, chỉnh màu theo sky.jpg;
-#   - trăng: đĩa trăng + quầng + mây sát trăng lấy từ sky.jpg, chiếu đúng như phông phẳng cũ nên trăng vẫn ở góc trên
-#     trái khung gốc; chi tiết sky.jpg đủ trong 4,6° quanh tâm trăng, hết ở 7°; độ sáng/màu (quầng) hoà tới 20°.
-#     Bỏ phông phẳng `sky`: khung gốc và pano dùng chung MỘT bầu trời (world), không còn mép phông nào;
-#   - rắc thêm sao nhỏ sắc nét ở vùng trời tối.
-SKY_PXD = 30                    # px / độ (khung gốc ~32 px/độ)
+# ───────────────────────── 8. panoramic sky ─────────────────────────
+# "Level" equirect sky image: lon ∈ [-180, 180] (0 = horizontal direction of the base camera, positive = to the right),
+# lat ∈ [SKY_LAT0, 90]. Built once with numpy then cached at blender/textures/sky_pano.jpg:
+#   - base: Codex sky painting (raw/sky_pano_raw.png, no moon) spread over lon [-140, 10], mirrored for the rest
+#     (the mirror axis at lon 10° sits behind the house wall/porch ceiling so it never shows),
+#     the painting's horizon placed at SKY_HOR°, colour-matched to sky.jpg;
+#   - moon: moon disc + halo + nearby clouds taken from sky.jpg, projected exactly like the old flat backdrop so the moon stays in the top
+#     left of the base frame; full sky.jpg detail within 4.6° of the moon centre, gone by 7°; brightness/colour (halo) blended out to 20°.
+#     Drop the flat `sky` backdrop: the base frame and the pano share ONE sky (world), no backdrop edges left;
+#   - sprinkle small sharp stars in the dark sky areas.
+SKY_PXD = 30                    # px / degree (base frame ~32 px/degree)
 SKY_LAT0 = -12.0
-SKY_HOR = 0.6                   # vĩ độ đường chân trời của tranh Codex (đồi xa nhô lên trên mặt sân)
+SKY_HOR = 0.6                   # latitude of the Codex painting's horizon (distant hills rise above the yard)
 SKY_VER = 6
 
 
 def _np_load(path):
-    """Ảnh → float32 HxWx3 giá trị sRGB 0..1, hàng 0 = trên cùng."""
+    """Image → float32 HxWx3 sRGB values 0..1, row 0 = top."""
     im = _bpy.data.images.load(path, check_existing=False)
     w_, h_ = im.size
     a = _np.empty(w_ * h_ * 4, _np.float32)
@@ -1018,7 +1018,7 @@ def _np_load(path):
     fl = im.is_float
     _bpy.data.images.remove(im)
     a = a.reshape(h_, w_, 4)[::-1, :, :3].copy()
-    if fl:                                             # ảnh float là tuyến tính → về sRGB
+    if fl:                                             # float images are linear → convert to sRGB
         a = _np.where(a <= 0.0031308, a * 12.92, 1.055 * _np.power(_np.clip(a, 0, None), 1 / 2.4) - 0.055)
     return a
 
@@ -1036,7 +1036,7 @@ def _np_save_jpg(a, path, q=92):
 
 
 def _bilerp(a, x, y):
-    """Lấy mẫu song tuyến; x, y theo pixel (tâm pixel 0 ở 0,5), kẹp biên."""
+    """Bilinear sampling; x, y in pixels (pixel 0 centre at 0.5), clamped at the edges."""
     h_, w_ = a.shape[:2]
     x = _np.clip(x - 0.5, 0, w_ - 1.001)
     y = _np.clip(y - 0.5, 0, h_ - 1.001)
@@ -1060,13 +1060,13 @@ def _up2(a, shape):
     out[:hh, :ww] = b[:hh, :ww]
     out[hh:, :ww] = b[hh - 1:hh, :ww]
     out[:, ww:] = out[:, ww - 1:ww]
-    # làm mềm khối 2×2
+    # soften with a 2×2 box
     out = (out + _np.roll(out, 1, 0) + _np.roll(out, -1, 0) + _np.roll(out, 1, 1) + _np.roll(out, -1, 1)) / 5
     return out
 
 
 def _blur_pyr(a, k):
-    """Làm mờ rất rộng rẻ tiền: thu nhỏ 2^k lần rồi phóng lại."""
+    """Cheap very wide blur: downscale 2^k times then upscale again."""
     shapes = []
     for _ in range(k):
         shapes.append(a.shape)
@@ -1077,7 +1077,7 @@ def _blur_pyr(a, k):
 
 
 def _pull_push(col, msk):
-    """Điền vùng ngoài mặt nạ bằng màu kéo dài mượt từ vùng trong (pull-push nhiều mức)."""
+    """Fill outside the mask with colour smoothly extended from inside (multi-level pull-push)."""
     cs, ws = [col * msk[..., None]], [msk]
     while min(ws[-1].shape) > 4:
         cs.append(_down2(cs[-1]))
@@ -1092,7 +1092,7 @@ def _pull_push(col, msk):
 
 
 def _sky_geom():
-    """Thông số phông phẳng (từ build_scene) để chiếu sky.jpg đúng như mặt phẳng `sky`."""
+    """Flat backdrop parameters (from build_scene) to project sky.jpg exactly like the `sky` plane."""
     fwd_c = _V(fwd).normalized()
     rgt = _V(right).normalized()
     upp = rgt.cross(fwd_c).normalized()
@@ -1101,7 +1101,7 @@ def _sky_geom():
 
 
 def _sky_dirs(lon, lat):
-    """Hướng thế giới cho lưới lon/lat (độ) trong hệ level: fwd_h, right, z."""
+    """World directions for a lon/lat grid (degrees) in the level frame: fwd_h, right, z."""
     _, rgt, _, fh_ = _sky_geom()
     lo, la = _np.radians(lon), _np.radians(lat)
     cl = _np.cos(la)
@@ -1112,7 +1112,7 @@ def _sky_dirs(lon, lat):
 
 
 def _skyjpg_uv(d):
-    """Hướng → (u, v) trên phông phẳng (giống UV của mesh `sky`), v hướng lên. Trả thêm cờ hợp lệ."""
+    """Direction → (u, v) on the flat backdrop (same as the `sky` mesh UVs), v up. Also returns a validity flag."""
     fwd_c, rgt, upp, _ = _sky_geom()
     df = d @ _np.array(fwd_c)
     ok = df > 0.05
@@ -1141,34 +1141,34 @@ def _build_sky_pano(out_path):
     lat = 90 - (_np.arange(PH, dtype=_np.float32) + 0.5) / SKY_PXD
     LON, LAT = _np.meshgrid(lon, lat)
     skyj = _np_load(sky_p) if os.path.exists(sky_p) else None
-    # 1. nền Codex
+    # 1. Codex base
     if os.path.exists(raw_p):
         cod = _np_load(raw_p)
         Hc, Wc = cod.shape[:2]
         s = Wc / 150.0
         base = _np.empty((PH, PW, 3), _np.float32)
-        for j in range(0, PH, 256):                    # theo khối hàng cho đỡ tốn RAM
+        for j in range(0, PH, 256):                    # in row blocks to save RAM
             t = _np.mod((LON[j:j + 256] + 140.0) / 150.0, 2.0)
             t = _np.where(t > 1, 2 - t, t)
             base[j:j + 256] = _bilerp(cod, t * Wc, 0.88 * Hc - (LAT[j:j + 256] - SKY_HOR) * s)
-        if skyj is not None:                           # chỉnh màu theo phần trời của sky.jpg (bỏ vùng trăng)
+        if skyj is not None:                           # colour-match to the sky part of sky.jpg (excluding the moon area)
             ref = skyj[:int(skyj.shape[0] * 0.62)].reshape(-1, 3)
             ref = ref[ref.mean(1) < 0.45]
             src = cod[:int(Hc * 0.8)].reshape(-1, 3)
             mu_r, sd_r, mu_s, sd_s = ref.mean(0), ref.std(0), src.mean(0), src.std(0)
             k_ = _np.clip(sd_r / _np.maximum(sd_s, 1e-4), 0.7, 1.4)
             base = (base - mu_s) * k_ + mu_r
-    else:                                              # thiếu tranh: gradient chàm → xanh xám
+    else:                                              # no painting: indigo → blue-grey gradient
         g = _np.clip((LAT - SKY_HOR) / 60.0, 0, 1)[..., None]
         base = _np.array((0.23, 0.29, 0.42)) * (1 - g) + _np.array((0.08, 0.10, 0.2)) * g
         base = _np.where((LAT < SKY_HOR)[..., None], _np.array((0.03, 0.035, 0.05)), base)
     base = base.astype(_np.float32)
-    # 2–3. trăng của sky.jpg (đĩa trăng, quầng, mây sát trăng) dán đúng hướng cũ, hoà vào tranh Codex theo bán kính
+    # 2–3. the sky.jpg moon (disc, halo, nearby clouds) pasted at the old direction, blended into the Codex painting by radius
     keep = _np.zeros((PH, PW), bool)
     if skyj is not None:
         Hs, Ws = skyj.shape[:2]
         lum = skyj.mean(-1)
-        rr, cc = _np.nonzero(lum > 0.85)                # tâm đĩa trăng trong sky.jpg
+        rr, cc = _np.nonzero(lum > 0.85)                # moon disc centre in sky.jpg
         mu, mv = (cc.mean() + 0.5) / Ws, 1 - (rr.mean() + 0.5) / Hs
         fwd_c, rgt, upp, _ = _sky_geom()
         mdir = (fwd_c * SKY_D + upp * (mv * (sh + 0.5) - sh + fh) + rgt * (x0 + mu * sw)).normalized()
@@ -1181,19 +1181,19 @@ def _build_sky_pano(out_path):
         u, v, ok = _skyjpg_uv(d)
         inside = ok & (u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)
         S = _np.where(inside[..., None], _bilerp(skyj, u * Ws, (1 - v) * Hs), 0).astype(_np.float32)
-        # ngoài mép sky.jpg (bên trái trăng): kéo dài mờ từ dải sát mép, bỏ đĩa trăng để trăng không loang
+        # beyond the sky.jpg edge (left of the moon): blurred extension from the edge strip, excluding the moon disc so it doesn't smear
         din = _np.degrees(_np.minimum(_np.minimum(u, 1 - u) * sw, _np.minimum(v, 1 - v) * (sh + 0.5)) / SKY_D)
         src = inside & (din < 2.0) & (S.mean(-1) < 0.75)
         X = _np.where(inside[..., None], S, _pull_push(S, src.astype(_np.float32))).astype(_np.float32)
         dist = _np.degrees(_np.arccos(_np.clip(d @ _np.array(mdir), -1, 1)))
         sstep = lambda x: x * x * (3 - 2 * x)
-        wNear = sstep(_np.clip((7.0 - dist) / 2.4, 0, 1))[..., None]      # chi tiết sky.jpg: đủ trong 4,6°, hết ở 7°
-        wLow = sstep(_np.clip((20.0 - dist) / 15.0, 0, 1))[..., None]     # sáng/màu (quầng trăng): tới 20°
+        wNear = sstep(_np.clip((7.0 - dist) / 2.4, 0, 1))[..., None]      # sky.jpg detail: full within 4.6°, gone by 7°
+        wLow = sstep(_np.clip((20.0 - dist) / 15.0, 0, 1))[..., None]     # brightness/colour (moon halo): out to 20°
         C = base[j0:j1, i0:i1]
         Lc, Lx = _blur_pyr(C, 6), _blur_pyr(X, 6)
         base[j0:j1, i0:i1] = (C - Lc) * (1 - wNear) + (X - Lx) * wNear + Lc * (1 - wLow) + Lx * wLow
         keep[j0:j1, i0:i1] = wNear[..., 0] > 0.02
-    # 4. sao nhỏ sắc nét ở vùng trời tối (ngoài vùng sky.jpg)
+    # 4. small sharp stars in dark sky areas (outside the sky.jpg area)
     rs = _np.random.RandomState(31)
     nstar = 1400
     sx = rs.uniform(0, PW, nstar)
@@ -1206,7 +1206,7 @@ def _build_sky_pano(out_path):
         if yi < 1 or yi >= PH - 1 or xi < 1 or xi >= PW - 1 or keep[yi, xi]:
             continue
         bg = base[yi, xi].mean()
-        if bg > 0.2:                                   # sau mây sáng: bỏ
+        if bg > 0.2:                                   # behind bright clouds: skip
             continue
         k_ = b_ * _np.clip((0.2 - bg) * 6, 0, 1)
         base[yi, xi] += c_ * k_
@@ -1222,7 +1222,7 @@ def _sky():
     _build_sky_pano(tex_path)
     wt = sc.world.node_tree
     nodes = wt.nodes
-    bg0 = next(n for n in nodes if n.type == "BACKGROUND")        # ánh sáng môi trường cũ (#141a33, render_passes chỉnh)
+    bg0 = next(n for n in nodes if n.type == "BACKGROUND")        # old ambient light (#141a33, adjusted by render_passes)
     out = next(n for n in nodes if n.type == "OUTPUT_WORLD")
     tc = nodes.new("ShaderNodeTexCoord")
     dvec = _nvm(wt, "NORMALIZE", tc.outputs["Generated"])
@@ -1245,7 +1245,7 @@ def _sky():
     it.interpolation = "Linear"
     wt.links.new(cmb.outputs[0], it.inputs["Vector"])
     bg1 = nodes.new("ShaderNodeBackground")
-    bg1.name = "sky_bg"                                # render_passes.py chỉnh Strength cùng phông trời phẳng
+    bg1.name = "sky_bg"                                # render_passes.py adjusts Strength together with the flat sky backdrop
     bg1.inputs["Strength"].default_value = 1.0
     wt.links.new(it.outputs["Color"], bg1.inputs["Color"])
     lp = nodes.new("ShaderNodeLightPath")
@@ -1254,7 +1254,7 @@ def _sky():
     wt.links.new(bg0.outputs[0], mix.inputs[1])
     wt.links.new(bg1.outputs[0], mix.inputs[2])
     wt.links.new(mix.outputs[0], out.inputs["Surface"])
-    # bỏ phông trời phẳng cũ: trời giờ chỉ còn world (giữ vật liệu "sky" để script cũ không lỗi)
+    # drop the old flat sky backdrop: the sky is now world-only (keep the "sky" material so old scripts don't break)
     old = _bpy.data.objects.get("sky")
     if old:
         old.data.materials[0].use_fake_user = True
@@ -1262,16 +1262,16 @@ def _sky():
     print("WIDE sky world")
 
 
-# ───────────────────────── 8b. cửa ra vào tinh tế hơn + đồ trang trí chân tường ─────────────────────────
-# Cửa cũ (hộp phẳng + 4 tấm panel dán + núm vuông) → cửa gỗ sơn đỏ rượu bóng satin: khung đố/khung ngang thật, nửa trên
-# ô kính chia 6 (ánh vàng phòng trong qua rèm voan), nửa dưới 2 panel nổi vát cạnh + nẹp chỉ, tay nắm + khoá đồng,
-# khe thư, vòng hoa lá thu treo ruy băng; nẹp khung cửa có chân đế + mũ chỉ; số nhà.
-# Chân tường bên phải cửa: kiện rơm + bí to/nhỏ, chậu cúc đại đoá; dưới cửa sổ: ghế băng gỗ + chăn kẻ ô + bí trắng.
-# Thảm chùi chân đã về đúng trước cửa (sửa ở porch_details). Lá khô nằm dưới chân các món mới bị dọn đi.
+# ───────────────────────── 8b. a more refined front door + decorations along the wall base ─────────────────────────
+# Old door (flat box + 4 stuck-on panels + square knob) → wine-red satin painted wood door: real stiles/rails, upper half
+# 6-pane glass (warm room glow through a voile curtain), lower half 2 bevelled raised panels + mouldings, brass handle + lock,
+# mail slot, autumn-leaf wreath hung on a ribbon; door casing with plinth blocks + head moulding; house number.
+# Wall base right of the door: hay bale + big/small pumpkins, potted mums; under the window: wooden bench + plaid blanket + white pumpkin.
+# The doormat now sits right in front of the door (fixed in porch_details). Dry leaves under the new items are cleared.
 def _mat_door_paint():
     mb = MB("door_paint")
     tc = mb.node("ShaderNodeTexCoord")
-    mp = mb.node("ShaderNodeMapping"); mp.inputs["Scale"].default_value = (60.0, 60.0, 2.5)    # thớ gỗ dọc dưới lớp sơn
+    mp = mb.node("ShaderNodeMapping"); mp.inputs["Scale"].default_value = (60.0, 60.0, 2.5)    # vertical wood grain under the paint
     mb.link(tc.outputs["Object"], mp.inputs["Vector"])
     grain = mb.noise(1.0, 6.0, mp.outputs[0], 0.6)
     col = mb.ramp(grain.outputs["Fac"], [(0.3, "#401806"), (0.7, "#62260c")])
@@ -1292,7 +1292,7 @@ def _mat_brass(name="brass", rough=0.28):
 
 
 def _mat_door_glass():
-    """Ô kính cửa: phòng trong sau rèm voan (nếp dọc), ấm ở giữa-dưới; + phản chiếu bóng loáng của kính."""
+    """Door glass pane: room behind a voile curtain (vertical folds), warm at the lower middle; + glossy glass reflection."""
     def build(nt):
         tc = nt.nodes.new("ShaderNodeTexCoord")
         sep = nt.nodes.new("ShaderNodeSeparateXYZ")
@@ -1349,7 +1349,7 @@ def _mat_straw():
 
 
 def _mat_mum():
-    """Cúc đại đoá: bông nhỏ dày đặc (voronoi), đỏ rượu → cam gỉ, nhuỵ vàng, khe tối giữa các bông."""
+    """Mums: dense small blooms (voronoi), wine red → rust orange, yellow centres, dark gaps between blooms."""
     mb = MB("mum_flowers")
     nt = mb.nt
     tc = mb.node("ShaderNodeTexCoord")
@@ -1368,7 +1368,7 @@ def _mat_mum():
 
 
 def _mat_plaid():
-    """Chăn len kẻ ô buffalo đỏ–đen."""
+    """Red–black buffalo-check wool blanket."""
     mb = MB("plaid")
     nt = mb.nt
     tc = mb.node("ShaderNodeTexCoord")
@@ -1376,7 +1376,7 @@ def _mat_plaid():
     mb.link(tc.outputs["Object"], sep.inputs[0])
     a = _nm(nt, "LESS_THAN", _nm(nt, "FRACT", _nm(nt, "DIVIDE", sep.outputs["X"], 0.08)), 0.5)
     b = _nm(nt, "LESS_THAN", _nm(nt, "FRACT", _nm(nt, "DIVIDE", _nm(nt, "ADD", sep.outputs["Y"], sep.outputs["Z"]), 0.08)), 0.5)
-    k = _nm(nt, "ADD", a, b)                                     # 0 đen, 1 đỏ sẫm, 2 đỏ
+    k = _nm(nt, "ADD", a, b)                                     # 0 black, 1 dark red, 2 red
     col = _nramp(nt, _nm(nt, "MULTIPLY", k, 0.5), [(0.0, "#141012"), (0.5, "#4a1012"), (1.0, "#8e1c1a")])
     mb.link(col, mb.bsdf.inputs["Base Color"])
     mb.set(Roughness=0.95, Sheen_Weight=0.6)
@@ -1400,7 +1400,7 @@ def _lathe_obj(name, prof, mat, loc, seg=32, smooth=True, check=True):
 
 
 def _clear_leaves(rects):
-    """Bỏ những chiếc lá khô (đảo mặt liền nhau) có tâm nằm trong các hình chữ nhật (x0, x1, y0, y1)."""
+    """Remove dry leaves (connected face islands) whose centre lies inside the rectangles (x0, x1, y0, y1)."""
     for on in ("porch_leaves", "porch_leaves_wide"):
         ob = _bpy.data.objects.get(on)
         if not ob:
@@ -1441,9 +1441,9 @@ def _door():
     trim_m = _bpy.data.materials.get("porch_paint") or M_TRIM
     x0, x1, zt = DX0, DX1, DZ
     cx = (x0 + x1) / 2
-    yF, yB = WALL_Y - 0.048, WALL_Y - 0.006                      # mặt trước / sau cánh cửa
+    yF, yB = WALL_Y - 0.048, WALL_Y - 0.006                      # front / back face of the door leaf
     ST, TR, LR0, LR1, BR, MS = 0.12, 0.13, 0.92, 1.12, 0.24, 0.045
-    # khung cánh: đố đứng, khung ngang trên / giữa (ổ khoá) / dưới, đố giữa phần dưới
+    # door frame: stiles, top / lock / bottom rails, centre mullion in the lower half
     bm = _bmesh.new()
     _bm_box(bm, x0, x0 + ST, yF, yB, 0.004, zt)
     _bm_box(bm, x1 - ST, x1, yF, yB, 0.004, zt)
@@ -1451,18 +1451,18 @@ def _door():
     _bm_box(bm, x0 + ST, x1 - ST, yF, yB, LR0, LR1)
     _bm_box(bm, x0 + ST, x1 - ST, yF, yB, 0.004, BR)
     _bm_box(bm, cx - MS, cx + MS, yF, yB, BR, LR0)
-    _bm_box(bm, x0 + ST, x1 - ST, yF + 0.018, yF + 0.024, BR, LR0)          # tấm lưng sau hai ô panel dưới
+    _bm_box(bm, x0 + ST, x1 - ST, yF + 0.018, yF + 0.024, BR, LR0)          # backing board behind the two lower panels
     slab = _bm_obj("door_frame", bm, paint, check=False)
     bv = slab.modifiers.new("bevel", "BEVEL")
     bv.width, bv.segments, bv.limit_method = 0.003, 2, "ANGLE"
-    # panel nổi vát cạnh (raised field) ở hai ô dưới
+    # bevelled raised field panels in the two lower openings
     for i, (a, b) in enumerate(((x0 + ST, cx - MS), (cx + MS, x1 - ST))):
         bm = _bmesh.new()
         _bm_box(bm, a + 0.004, b - 0.004, yF + 0.006, yF + 0.018, BR + 0.004, LR0 - 0.004)
         pn = _bm_obj(f"door_panel{i}", bm, paint, check=False)
         bv = pn.modifiers.new("bevel", "BEVEL")
         bv.width, bv.segments, bv.profile = 0.028, 2, 0.15
-    # nẹp chỉ quanh mọi ô (lồi nhẹ khỏi mặt khung, bo tròn)
+    # moulding around every opening (slightly proud of the frame, rounded)
     bm = _bmesh.new()
     w_, d_ = 0.016, 0.01
     for (a, b, c, d) in ((x0 + ST, cx - MS, BR, LR0), (cx + MS, x1 - ST, BR, LR0), (x0 + ST, x1 - ST, LR1, zt - TR)):
@@ -1473,12 +1473,12 @@ def _door():
     mo = _bm_obj("door_moulding", bm, paint, check=False)
     bv = mo.modifiers.new("bevel", "BEVEL")
     bv.width, bv.segments = 0.005, 3
-    # kính + song chia 2×3
+    # glass + 2×3 muntins
     gx0, gx1, gz0, gz1 = x0 + ST + w_, x1 - ST - w_, LR1 + w_, zt - TR - w_
     bm = _bmesh.new()
     _bm_box(bm, gx0, gx1, yF + 0.012, yF + 0.016, gz0, gz1)
     if _bpy.data.materials.get("window_clear") and _bpy.data.materials.get("sheer_voile"):
-        # kính thật: khoét tường sau ô kính, rèm voan + đèn sảnh trong nhà (phòng của cửa sổ hiên kéo sang tới đây)
+        # real glass: cut the wall behind the pane, voile curtain + hall light inside (the porch window's room extends to here)
         _bm_obj("door_glass", bm, _bpy.data.materials["window_clear"], check=False)
         _cut_wall("door_glass", gx0, gx1, gz0, gz1)
         _voile("door_voile", gx0 - 0.03, gx1 + 0.03, gz0 - 0.03, gz1 + 0.03, y=WALL_Y + 0.02)
@@ -1495,14 +1495,14 @@ def _door():
     mu = _bm_obj("door_muntins", bm, paint, check=False)
     bv = mu.modifiers.new("bevel", "BEVEL")
     bv.width, bv.segments = 0.003, 2
-    # đồ đồng: khe thư, tay nắm + khoá trên tấm ốp, bản lề
+    # brass hardware: mail slot, handle + lock on a backplate, hinges
     bm = _bmesh.new()
     _bm_box(bm, cx - 0.14, cx + 0.14, yF - 0.006, yF, 0.985, 1.055)
     _bm_obj("door_mailslot", bm, brass, check=False).modifiers.new("bevel", "BEVEL").width = 0.004
     bm = _bmesh.new()
     _bm_box(bm, cx - 0.11, cx + 0.11, yF - 0.008, yF - 0.004, 1.005, 1.035)
     _bm_obj("door_mailslot_flap", bm, brass, check=False).modifiers.new("bevel", "BEVEL").width = 0.003
-    hx = x0 + 0.065                                              # đố khoá (bản lề bên phải)
+    hx = x0 + 0.065                                              # lock stile (hinges on the right)
     bm = _bmesh.new()
     _bm_box(bm, hx - 0.028, hx + 0.028, yF - 0.007, yF, 0.84, 1.2)
     bp = _bm_obj("door_backplate", bm, brass, check=False)
@@ -1512,12 +1512,12 @@ def _door():
                                               (0.062, 0.031), (0.074, 0.027), (0.08, 0.012), (0.082, 0.0)]),
                          ("door_deadbolt", 1.12, [(0.0, 0.02), (0.01, 0.018), (0.014, 0.012), (0.022, 0.012), (0.024, 0.0)])):
         k = _lathe_obj(nm_, prof, brass, (0, 0, 0), seg=40, check=False)
-        k.rotation_euler = (_m.pi / 2, 0, 0)                    # trục z → −y (hướng ra hiên)
+        k.rotation_euler = (_m.pi / 2, 0, 0)                    # z axis → −y (facing the porch)
         k.location = (hx, yF - 0.006, z)
     bm = _bmesh.new()
-    _bm_box(bm, hx - 0.006, hx + 0.006, yF - 0.026, yF - 0.02, 1.105, 1.135)       # lẫy khoá
+    _bm_box(bm, hx - 0.006, hx + 0.006, yF - 0.026, yF - 0.02, 1.105, 1.135)       # deadbolt thumb turn
     _bm_obj("door_thumbturn", bm, brass, check=False)
-    # vòng hoa: vành cành khô + lá thu (atlas) + quả mọng, treo bằng ruy băng kẻ ô từ đỉnh cửa
+    # wreath: dry twig ring + autumn leaves (atlas) + berries, hung on a plaid ribbon from the top of the door
     wz, wr = 1.55, 0.155
     wy = yF - 0.02
     tor = _bpy.data.meshes.new("wreath_base")
@@ -1546,7 +1546,7 @@ def _door():
             _add_leaf(bm, _pick_tint(0.1) if "_pick_tint" in globals() else (1, 1, 1), loc, _wrng.uniform(0.07, 0.1), yaw,
                       _wrng.randrange(8), (_wrng.uniform(-0.25, 0.25), _wrng.uniform(-0.25, 0.25)))
             n_leaf += 1
-        _bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=_Mx.Rotation(_m.pi / 2, 3, "X"))   # mặt lá → −y
+        _bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=_Mx.Rotation(_m.pi / 2, 3, "X"))   # leaf face → −y
         _bmesh.ops.translate(bm, vec=(cx, wy - 0.01, wz), verts=bm.verts)
         _bm_obj("wreath_leaves", bm, _bpy.data.materials["leaf"], smooth=True, check=False)
     berry = mat_simple("berry", "#a8241a", 0.25, Coat_Weight=0.6)
@@ -1563,14 +1563,14 @@ def _door():
     plaid = _mat_plaid()
     bm = _bmesh.new()
     _bm_box(bm, cx - 0.018, cx + 0.018, yF - 0.004, yF - 0.001, wz + wr - 0.01, zt + 0.004)
-    _bm_box(bm, cx - 0.018, cx + 0.018, yF - 0.004, yB, zt - 0.002, zt + 0.006)                # vắt qua đỉnh cánh
+    _bm_box(bm, cx - 0.018, cx + 0.018, yF - 0.004, yB, zt - 0.002, zt + 0.006)                # draped over the top of the door
     _bm_obj("wreath_ribbon", bm, plaid, check=False)
-    # nẹp khung cửa: chân đế, mũ chỉ trên đầu (gờ + chỉ lót)
+    # door casing: plinth blocks, head moulding (cornice + bed moulding)
     for nm_, a, b in (("plinth_l", x0 - 0.115, x0 + 0.005), ("plinth_r", x1 - 0.005, x1 + 0.115)):
         _bx(nm_, a, b, WALL_Y - 0.07, WALL_Y, 0.0, 0.2, trim_m, check=False)
     _bx("door_head_cap", x0 - 0.15, x1 + 0.15, WALL_Y - 0.085, WALL_Y, DZ + 0.17, DZ + 0.205, trim_m, check=False)
     _bx("door_head_bed", x0 - 0.12, x1 + 0.12, WALL_Y - 0.065, WALL_Y, DZ + 0.15, DZ + 0.172, trim_m, check=False)
-    # số nhà bằng đồng trên tường phải cửa
+    # brass house number on the wall right of the door
     cu = _bpy.data.curves.new("house_number", "FONT")
     cu.body = "13"
     cu.size = 0.13
@@ -1585,7 +1585,7 @@ def _door():
     _bm_box(bm, x1 + 0.24, x1 + 0.44, WALL_Y - 0.004, WALL_Y, 1.44, 1.62)
     _bm_obj("house_number_plate", bm, mat_simple("number_plate", "#1a1c1e", 0.5), check=False)
 
-    # ── đồ trang trí chân tường ──
+    # ── wall-base decorations ──
     straw = _mat_straw()
     bx0, bx1, by0, by1, bh = 1.48, 1.94, 1.15, 1.49, 0.32
     bm = _bmesh.new()
@@ -1612,7 +1612,7 @@ def _door():
             g = _gourd(nm_, x, y, r, hz, lob, dep, m_, yaw=yaw, stem_len=0.02 + r * 0.12, stem_r=0.004 + r * 0.03, **kw)
             g.location.z += z
             _wreg(g)
-    # chậu cúc: chậu đất nung có vành, bụi hoa vồng tròn
+    # potted mums: rimmed terracotta pot, domed flower mound
     terra = MB("terracotta")
     tcn = terra.node("ShaderNodeTexCoord")
     tnz = terra.noise(18.0, 5.0, tcn.outputs["Object"])
@@ -1630,7 +1630,7 @@ def _door():
         v.co = _V((v.co.x * bump_, v.co.y * bump_, max(v.co.z * 0.78 * bump_, -0.02)))
     _bmesh.ops.translate(bm, verts=bm.verts, vec=(px_, py_, 0.255))
     _bm_obj("mum_flowers", bm, _mat_mum(), smooth=True)
-    # ghế băng gỗ dưới cửa sổ + chăn kẻ ô gấp
+    # wooden bench under the window + folded plaid blanket
     bench_m = mat_wood("bench_wood", "#9a7a5c", tile=0.6)
     sx0, sx1, sy0, sy1, sz = 2.12, 3.08, 1.12, 1.49, 0.45
     bm = _bmesh.new()
@@ -1642,8 +1642,8 @@ def _door():
     for xx in (sx0 + 0.06, sx1 - 0.06):
         for yy in (sy0 + 0.04, sy1 - 0.04):
             _bm_box(bm, xx - 0.025, xx + 0.025, yy - 0.025, yy + 0.025, 0.0, sz - 0.032)
-        _bm_box(bm, xx - 0.02, xx + 0.02, sy0 + 0.04, sy1 - 0.04, 0.09, 0.14)       # thanh giằng
-    _bm_box(bm, sx0 + 0.06, sx1 - 0.06, sy0 + 0.02, sy0 + 0.05, sz - 0.1, sz - 0.032)  # diềm trước
+        _bm_box(bm, xx - 0.02, xx + 0.02, sy0 + 0.04, sy1 - 0.04, 0.09, 0.14)       # stretcher
+    _bm_box(bm, sx0 + 0.06, sx1 - 0.06, sy0 + 0.02, sy0 + 0.05, sz - 0.1, sz - 0.032)  # front apron
     bn = _bm_obj("bench", bm, bench_m)
     bv = bn.modifiers.new("bevel", "BEVEL")
     bv.width, bv.segments = 0.004, 2
@@ -1652,25 +1652,25 @@ def _door():
     bl = _bm_obj("blanket", bm, plaid)
     bv = bl.modifiers.new("bevel", "BEVEL")
     bv.width, bv.segments = 0.03, 4
-    bm = _bmesh.new()                                            # mép chăn buông xuống phía trước ghế
+    bm = _bmesh.new()                                            # blanket edge hanging down in front of the bench
     _bm_box(bm, 2.26, 2.62, sy0 - 0.012, sy0 - 0.002, sz - 0.2, sz + 0.02)
     _bm_obj("blanket_drape", bm, plaid).modifiers.new("bevel", "BEVEL").width = 0.004
-    # dọn lá nằm dưới chân các món mới
+    # clear leaves under the new items
     _clear_leaves([(bx0 - 0.03, bx1 + 0.03, by0 - 0.03, by1 + 0.03), (px_ - 0.15, px_ + 0.15, py_ - 0.15, py_ + 0.15),
                    (1.36, 1.5, 0.98, 1.14), (1.5, 1.62, 0.97, 1.11),
                    (sx0 + 0.03, sx0 + 0.09, sy0 + 0.01, sy1 - 0.01), (sx1 - 0.09, sx1 - 0.03, sy0 + 0.01, sy1 - 0.01)])
     print("WIDE door")
 
 
-# ───────────────────────── 9. mưa: bề mặt ướt ngoài mái + dải sát mép hở của sàn hiên ─────────────────────────
-# Mép hở (mưa tạt vào): trước y = FRONT_EDGE (mái đua che bớt), trái x = PX0, phải x = PX1, sau y = WALL_Y chỉ với
-# x < WALL_X0 (lan can nhìn ra sân; phải WALL_X0 là tường nhà). Độ ướt = 1 ngoài mép, giảm mượt vào trong theo bề rộng
-# từng mép; mặt hướng xuống (trần, đáy dầm) luôn khô. Ướt = sẫm màu + lớp coat nước bóng (IOR 1,33) phản chiếu trời/trăng.
+# ───────────────────────── 9. rain: wet surfaces outside the roof + strips along the open edges of the porch floor ─────────────────────────
+# Open edges (rain blows in): front y = FRONT_EDGE (the overhang shields part of it), left x = PX0, right x = PX1, back y = WALL_Y only for
+# x < WALL_X0 (railing looking out to the yard; right of WALL_X0 is the house wall). Wetness = 1 outside the edge, fading smoothly inwards by
+# each edge's width; downward-facing surfaces (ceiling, beam bottoms) always dry. Wet = darker + glossy water coat (IOR 1.33) reflecting sky/moon.
 WET_REACH = {"front": 0.16, "left": 0.55, "right": 0.55, "back": 0.80}
 
 
 def _wet_mask(nt, full=False):
-    """Socket 0..1 độ ướt theo vị trí thế giới (full=True: ướt đều, vd. mái, sân)."""
+    """0..1 wetness socket by world position (full=True: uniformly wet, e.g. roof, yard)."""
     if full:
         v = nt.nodes.new("ShaderNodeValue")
         v.outputs[0].default_value = 1.0
@@ -1683,20 +1683,20 @@ def _wet_mask(nt, full=False):
     nz.inputs["Scale"].default_value = 2.2
     nz.inputs["Detail"].default_value = 4.0
     nt.links.new(geo.outputs["Position"], nz.inputs["Vector"])
-    jit = _nm(nt, "MULTIPLY_ADD", nz.outputs["Fac"], 0.5, -0.25)          # mép vùng ướt loang ±12 cm
+    jit = _nm(nt, "MULTIPLY_ADD", nz.outputs["Fac"], 0.5, -0.25)          # wet-area edge wanders ±12 cm
 
-    def edge(d, reach):                                # d: khoảng cách vào trong mép (m) → 1 − smoothstep(0, reach, d)
+    def edge(d, reach):                                # d: distance inward from the edge (m) → 1 − smoothstep(0, reach, d)
         t = _nm(nt, "DIVIDE", _nm(nt, "ADD", d, _nm(nt, "MULTIPLY", jit, reach / 0.6)), reach, clamp=True)
         return _nm(nt, "SUBTRACT", 1.0, _nm(nt, "MULTIPLY", _nm(nt, "MULTIPLY", t, t), _nm(nt, "MULTIPLY_ADD", t, -2.0, 3.0)))
 
     wf = edge(_nm(nt, "SUBTRACT", y, FRONT_EDGE), WET_REACH["front"])
     wl = edge(_nm(nt, "SUBTRACT", x, PX0), WET_REACH["left"])
     wr = edge(_nm(nt, "SUBTRACT", PX1, x), WET_REACH["right"])
-    # sau: tường nhà che dần từ góc WALL_X0 sang phải (thêm 3 m "khoảng cách" mỗi mét)
+    # back: the house wall shields progressively from the WALL_X0 corner rightwards (adds 3 m of "distance" per metre)
     db = _nm(nt, "ADD", _nm(nt, "SUBTRACT", WALL_Y, y), _nm(nt, "MULTIPLY", _nm(nt, "MAXIMUM", _nm(nt, "SUBTRACT", x, WALL_X0), 0.0), 3.0))
     wb = edge(db, WET_REACH["back"])
     w = _nm(nt, "MAXIMUM", _nm(nt, "MAXIMUM", wf, wl), _nm(nt, "MAXIMUM", wr, wb))
-    # mặt hướng xuống khô
+    # downward-facing surfaces stay dry
     sn = nt.nodes.new("ShaderNodeSeparateXYZ")
     nt.links.new(geo.outputs["Normal"], sn.inputs[0])
     up = _nm(nt, "MULTIPLY_ADD", sn.outputs["Z"], 2.0, 1.4, clamp=True)
@@ -1712,7 +1712,7 @@ def _wetify(mname, full=False, dark=0.55, coat=1.0, rough_wet=0.3, puddle=True, 
     if bsdf is None:
         return
     w = _wet_mask(nt, full)
-    # màu: sẫm lại theo độ ướt
+    # colour: darkens with wetness
     bc = bsdf.inputs["Base Color"]
     mul = nt.nodes.new("ShaderNodeMix")
     mul.data_type, mul.blend_type = "RGBA", "MULTIPLY"
@@ -1725,7 +1725,7 @@ def _wetify(mname, full=False, dark=0.55, coat=1.0, rough_wet=0.3, puddle=True, 
     b.default_value = (dark, dark, dark, 1.0)
     nt.links.new(w, mul.inputs["Factor"])
     nt.links.new([o for o in mul.outputs if o.type == "RGBA"][0], bc)
-    # nhám: giảm theo độ ướt
+    # roughness: decreases with wetness
     rs = bsdf.inputs["Roughness"]
     rmix = nt.nodes.new("ShaderNodeMix")
     rmix.data_type = "FLOAT"
@@ -1738,7 +1738,7 @@ def _wetify(mname, full=False, dark=0.55, coat=1.0, rough_wet=0.3, puddle=True, 
     fb.default_value = rough_wet
     nt.links.new(w, rmix.inputs["Factor"])
     nt.links.new([o for o in rmix.outputs if o.type == "VALUE"][0], rs)
-    # màng nước: coat bóng; vũng (noise) gần như gương
+    # water film: glossy coat; puddles (noise) almost mirror-like
     nt.links.new(_nm(nt, "MULTIPLY", w, coat), bsdf.inputs["Coat Weight"])
     bsdf.inputs["Coat IOR"].default_value = 1.33
     if puddle:
@@ -1760,22 +1760,22 @@ def _rain():
         _wetify(mn, dark=0.75, coat=0.85, rough_wet=0.3, puddle=False)
     for mn in ("leaf", "vine_leaf"):
         _wetify(mn, dark=0.7, coat=0.5, rough_wet=0.4, puddle=False)
-    # sân: ướt = sẫm + chút bóng, nhưng giữ specular nền thấp (nhìn sượt ở xa, trời sáng phản chiếu → thành "mặt hồ")
+    # yard: wet = darker + a little gloss, but keep base specular low (at grazing angles far away, the bright sky reflection turns it into a "lake")
     _wetify("yard_ground", full=True, dark=0.75, coat=0.1, rough_wet=0.9, coat_rough=0.3)
     _yg = _bpy.data.materials.get("yard_ground")
     if _yg:
         next(n for n in _yg.node_tree.nodes if n.type == "BSDF_PRINCIPLED").inputs["Specular IOR Level"].default_value = 0.035
     _wetify("roof_shingle", full=True, dark=0.8, coat=0.6, rough_wet=0.5, puddle=False)
     _wetify("bark", full=True, dark=0.6, coat=0.4, rough_wet=0.5, puddle=False)
-    # meta cho layout.json (render_passes.py): mái hiên che mưa, mép sàn hiên
+    # meta for layout.json (render_passes.py): porch roof rain cover, porch floor edges
     sc["pc_roof"] = [EAVE_X0, EAVE_X1, EAVE_Y, WALL_Y, EAVE_Z]
     sc["pc_floor_edge"] = [FRONT_EDGE, PX0, PX1, WALL_Y, WALL_X0]
     print("WIDE rain")
 
 
-# ───────────────────────── 10. cân lại ánh sáng: trời làm nguồn sáng môi trường, trăng đổ bóng rõ hơn ─────────────────────────
-SKY_AMB = 0.16       # tia khuếch tán thấy (SKY_AMB × ảnh trời toàn cảnh) + (1 − SKY_AMB) × nền #141a33 cũ
-SKY_GLOSS = 0.8      # tia phản chiếu thấy trời gần như thật (mặt ướt soi trời, trăng)
+# ───────────────────────── 10. rebalance lighting: sky as ambient light source, crisper moon shadows ─────────────────────────
+SKY_AMB = 0.16       # diffuse rays see (SKY_AMB × panoramic sky) + (1 − SKY_AMB) × the old #141a33 background
+SKY_GLOSS = 0.8      # glossy rays see a near-real sky (wet surfaces mirror the sky, moon)
 
 
 def _relight():
@@ -1784,7 +1784,7 @@ def _relight():
     if bg1 is not None:
         bg0 = next(n for n in wt.nodes if n.type == "BACKGROUND" and n.name != "sky_bg")
         out = next(n for n in wt.nodes if n.type == "OUTPUT_WORLD")
-        mix_cam = out.inputs["Surface"].links[0].from_node          # mix(Is Camera Ray, bg0, bg1) của _sky()
+        mix_cam = out.inputs["Surface"].links[0].from_node          # mix(Is Camera Ray, bg0, bg1) from _sky()
         lp = next(n for n in wt.nodes if n.type == "LIGHT_PATH")
         fac = _nm(wt, "MULTIPLY_ADD", lp.outputs["Is Glossy Ray"], SKY_GLOSS - SKY_AMB, SKY_AMB)
         mx = wt.nodes.new("ShaderNodeMixShader")
@@ -1794,18 +1794,18 @@ def _relight():
         wt.links.new(mx.outputs[0], mix_cam.inputs[1])
     O_ = _bpy.data.objects
     if "moon" in O_:
-        O_["moon"].data.energy = 1.0                 # 0,7 → 1,0: bóng trăng rõ hơn
+        O_["moon"].data.energy = 1.0                 # 0.7 → 1.0: crisper moon shadows
     if "moon_fill" in O_:
-        O_["moon_fill"].data.energy = 2.2            # 4 → 2,2: đỡ phẳng, phần thiếu do trời (có hướng) bù
-        O_["moon_fill"].visible_glossy = False       # đèn phụ giả: không để lộ hình chữ nhật trong mặt ướt
+        O_["moon_fill"].data.energy = 2.2            # 4 → 2.2: less flat, the (directional) sky makes up the difference
+        O_["moon_fill"].visible_glossy = False       # fake fill light: don't reveal its rectangle in wet surfaces
     if "porch_key" in O_:
-        O_["porch_key"].visible_glossy = False       # (cùng lý do: hình chữ nhật sáng trong vũng nước ở bậc trước)
+        O_["porch_key"].visible_glossy = False       # (same reason: bright rectangle in the puddle on the front step)
     print("WIDE relight")
 
 
-# ───────────────────────── kiểm tra: không lọt vào khung gốc ─────────────────────────
+# ───────────────────────── check: nothing leaks into the base frame ─────────────────────────
 def _check_base_frame():
-    """Đếm đỉnh của object mới rơi vào khung gốc. Trần, mái, cây, nhà xa… phải = 0."""
+    """Count new-object verts that fall inside the base frame. Ceiling, roof, trees, distant houses… must be 0."""
     _bpy.context.view_layer.update()
     camo = sc.camera
     dg = _bpy.context.evaluated_depsgraph_get()
@@ -1825,8 +1825,8 @@ def _check_base_frame():
         ev.to_mesh_clear()
         if n:
             bad += 1
-            print(f"WIDE_WARN {o.name}: {n} đỉnh trong khung gốc")
-    print("WIDE check base frame:", "ok" if not bad else f"{bad} object lọt khung")
+            print(f"WIDE_WARN {o.name}: {n} verts inside the base frame")
+    print("WIDE check base frame:", "ok" if not bad else f"{bad} objects leak into the frame")
 
 
 if "porch" in _WPARTS:
@@ -1851,7 +1851,7 @@ if "rain" in _WPARTS:
     _rain()
 if "relight" in _WPARTS:
     _relight()
-# đèn vùng (area) không hiện trực tiếp trước camera khi nhìn quanh
+# area lights not directly visible to the camera when looking around
 for _n in ("porch_key", "moon_fill"):
     if _n in _bpy.data.objects:
         _bpy.data.objects[_n].visible_camera = False

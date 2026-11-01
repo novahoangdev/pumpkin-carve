@@ -1,10 +1,10 @@
-# Kiểm tra nền toàn cảnh bằng numpy, đúng như app sẽ dùng (chỉ dựa vào layout.json):
-#   1. chiếu ngược bg_lit_pano.jpg về khung camera gốc (cam.pos, cam.rot = thế giới → camera, nhìn theo −Z, f theo pt,
-#      tâm ảnh = giữa khung, y màn hình hướng xuống) rồi so với bg_lit.jpg: sai số trung bình + độ lệch (px) tìm bằng dò
-#      dịch chuyển; ảnh so sánh render/v3/pano_check.png (gốc | chiếu từ pano | hiệu ×4);
-#   2. ảnh xem thử khi "nhìn quanh": yaw −60/0/+60 × pitch +40/0/−45 ở tiêu cự 1× và 0,55× → render/v3/look_*.png
-#      (vùng ngoài phạm vi pano tô đỏ sẫm).
-# Chạy: Blender -b --factory-startup -P blender/scripts/check_pano.py
+# Check the panorama background with numpy, exactly as the app will use it (relying only on layout.json):
+#   1. reproject bg_lit_pano.jpg back into the original camera frame (cam.pos, cam.rot = world → camera, looking down −Z, f in pt,
+#      principal point = frame centre, screen y pointing down) and compare with bg_lit.jpg: mean error + offset (px) found by a
+#      shift search; comparison image render/v3/pano_check.png (original | reprojected from pano | diff ×4);
+#   2. "look around" previews: yaw −60/0/+60 × pitch +40/0/−45 at 1× and 0.55× focal length → render/v3/look_*.png
+#      (areas outside the pano's range painted dark red).
+# Run: Blender -b --factory-startup -P blender/scripts/check_pano.py
 import bpy, json, math, os
 import numpy as np
 
@@ -54,7 +54,7 @@ LAT0, LAT1 = PANO["lat"]
 
 
 def sample_pano(pano, d):
-    """Hướng thế giới (…×3) → màu trong pano theo đúng hợp đồng; trả thêm cờ nằm trong phạm vi."""
+    """World direction (…×3) → colour in the pano per the contract; also returns an in-range flag."""
     d = d / np.linalg.norm(d, axis=-1, keepdims=True)
     lon = np.degrees(np.arctan2(d @ RT, d @ F))
     lat = np.degrees(np.arcsin(np.clip(d @ UP, -1, 1)))
@@ -73,23 +73,23 @@ def blur(a, k):
     return a
 
 
-# ── 1. chiếu ngược về khung gốc ──
+# ── 1. reproject back into the original frame ──
 base = load(os.path.join(SCENE, "bg_lit.jpg"))
 pano = load(os.path.join(SCENE, "bg_lit_pano.jpg"))
 h, w = base.shape[:2]
-s = w / VW                                     # px trên mỗi pt
+s = w / VW                                     # px per pt
 xs = ((np.arange(w) + 0.5) / s)[None, :]
 ys = ((np.arange(h) + 0.5) / s)[:, None]
 f = CAM["f"]
 dc = np.stack(np.broadcast_arrays((xs - VW / 2) / f, -(ys - VH / 2) / f, -np.ones_like(xs + ys)), -1)
-Rm = np.array(CAM["rot"])                       # hàng = trục camera trong hệ thế giới
+Rm = np.array(CAM["rot"])                       # rows = camera axes in world space
 dw = dc @ Rm                                    # = Rᵀ · d_cam
 rep, ok = sample_pano(pano, dw)
-k = 1                                           # pano thưa hơn khung gốc (~20 so với ~32 px/độ): làm mờ nhẹ ảnh gốc
+k = 1                                           # pano is sparser than the original frame (~20 vs ~32 px/degree): lightly blur the original
 bb = blur(base, k)
 err = np.abs(rep - bb).mean(-1)
 mae = err[ok].mean() * 255
-# dò độ lệch: dịch ảnh chiếu ±4 px, tìm cực tiểu (nội suy parabol)
+# offset search: shift the reprojection ±4 px, find the minimum (parabolic interpolation)
 gy = lambda a: a.mean(-1)
 c0 = gy(bb)[40:-40, 40:-40]
 best = {}
@@ -107,18 +107,18 @@ def para(m, p, c):
 
 sx = bx + (para(best.get((bx - 1, by), emin), best.get((bx + 1, by), emin), emin) if abs(bx) < 4 else 0)
 sy = by + (para(best.get((bx, by - 1), emin), best.get((bx, by + 1), emin), emin) if abs(by) < 4 else 0)
-print(f"PANO_CHECK mae {mae:.2f}/255  (không làm mờ: {np.abs(rep - base).mean(-1)[ok].mean() * 255:.2f})  "
-      f"lệch tốt nhất dx {sx:+.2f} dy {sy:+.2f} px @{w}×{h} (= {sx / s:+.2f}, {sy / s:+.2f} pt)  "
-      f"mae tại đó {emin * 255:.2f}  ngoài phạm vi pano: {int((~ok).sum())} px")
+print(f"PANO_CHECK mae {mae:.2f}/255  (unblurred: {np.abs(rep - base).mean(-1)[ok].mean() * 255:.2f})  "
+      f"best offset dx {sx:+.2f} dy {sy:+.2f} px @{w}×{h} (= {sx / s:+.2f}, {sy / s:+.2f} pt)  "
+      f"mae there {emin * 255:.2f}  outside pano range: {int((~ok).sum())} px")
 sheet = np.concatenate([base, rep, np.clip(np.abs(rep - bb) * 4, 0, 1)], 1)
 save(sheet[::2, ::2], os.path.join(OUT, "pano_check.png"))
 
 
-# ── 1b. độ sâu: giải mã vài điểm biết trước + so bg_depth (khung gốc) với bg_depth_pano tại cùng hướng nhìn ──
+# ── 1b. depth: decode a few known points + compare bg_depth (original frame) with bg_depth_pano along the same view directions ──
 DEP = lay.get("depth")
 if DEP and os.path.exists(os.path.join(SCENE, "bg_depth.png")) and os.path.exists(os.path.join(SCENE, "bg_depth_pano.png")):
     dmin, dmax = DEP["min"], DEP["max"]
-    dec = lambda v: dmin * np.exp(v * math.log(dmax / dmin))          # v ∈ 0..1 (255 = trời)
+    dec = lambda v: dmin * np.exp(v * math.log(dmax / dmin))          # v ∈ 0..1 (255 = sky)
     db = load(os.path.join(SCENE, "bg_depth.png"))[..., 0]
     dp = load(os.path.join(SCENE, "bg_depth_pano.png"))[..., 0]
     hb, wb = db.shape
@@ -129,7 +129,7 @@ if DEP and os.path.exists(os.path.join(SCENE, "bg_depth.png")) and os.path.exist
         pc = Rm @ (np.array(P) - pos)
         return (VW / 2 + f * pc[0] / -pc[2]) * sb, (VH / 2 - f * pc[1] / -pc[2]) * sb
 
-    # điểm thử (m, thế giới): sàn dưới tâm bí, sàn giữa thềm, mặt cửa, tay vịn lan can sau, mặt tường cạnh đèn
+    # probe points (m, world): floor under the pumpkin centre, mid-porch floor, door face, top of the back railing, wall face next to the lamp
     C0 = lay["pumpkin"]["c"]
     probes = {"floor_under_pumpkin": (C0[0], C0[1], 0.0), "floor_mid": (0.25, 0.8, 0.0), "door": (0.6, 1.51, 1.2),
               "rail_top": (-0.6, 1.52, 0.885), "wall": (0.2, 1.55, 1.0)}
@@ -138,8 +138,8 @@ if DEP and os.path.exists(os.path.join(SCENE, "bg_depth.png")) and os.path.exist
         if not (0 <= x < wb and 0 <= y < hb):
             continue
         v = db[int(y), int(x)]
-        print(f"DEPTH_PROBE {k:20s} px ({x:6.1f},{y:6.1f})  giải mã {dec(v):6.3f} m  hình học {np.linalg.norm(np.array(P) - pos):6.3f} m")
-    # khung gốc → pano: cùng hướng tia, độ sâu theo tia phải trùng (trừ mép vật, nơi lấy mẫu lệch nửa pixel)
+        print(f"DEPTH_PROBE {k:20s} px ({x:6.1f},{y:6.1f})  decoded {dec(v):6.3f} m  geometric {np.linalg.norm(np.array(P) - pos):6.3f} m")
+    # original frame → pano: same ray direction, depth along the ray must match (except at object edges, where sampling is off by half a pixel)
     xs_ = ((np.arange(wb) + 0.5) / sb)[None, :]
     ys_ = ((np.arange(hb) + 0.5) / sb)[:, None]
     dcb = np.stack(np.broadcast_arrays((xs_ - VW / 2) / f, -(ys_ - VH / 2) / f, -np.ones_like(xs_ + ys_)), -1)
@@ -154,16 +154,16 @@ if DEP and os.path.exists(os.path.join(SCENE, "bg_depth.png")) and os.path.exist
     code = np.abs(db - vp) * 255
     sky = (db > 0.999) & (vp > 0.999)
     geo = (db < 0.999) & (vp < 0.999)
-    # bỏ mép vật (độ sâu đổi nhanh trong lân cận 2 px) khi tính sai số "mặt phẳng"
+    # skip object edges (depth changes fast within a 2 px neighbourhood) when computing the "surface" error
     gx = np.maximum(np.abs(np.diff(db, axis=1, prepend=db[:, :1])), np.abs(np.diff(db, axis=0, prepend=db[:1])))
     flat = geo & (blur(gx[..., None], 2)[..., 0] * 255 < 1.0)
-    print(f"PANO_DEPTH khung gốc vs pano: trời khớp {sky.sum() / max(1, ((db > 0.999) | (vp > 0.999)).sum()) * 100:.1f}%  "
-          f"mặt (bỏ mép): |Δ| trung vị {np.median(code[flat]):.2f} mã, p95 {np.percentile(code[flat], 95):.2f} mã, "
-          f"≤1 mã {np.mean(code[flat] <= 1.0) * 100:.1f}%  (1 mã = {math.log(dmax / dmin) / 255 * 100:.2f}% khoảng cách)  "
-          f"mọi px hình học ≤2 mã {np.mean(code[geo] <= 2.0) * 100:.1f}%")
+    print(f"PANO_DEPTH original frame vs pano: sky match {sky.sum() / max(1, ((db > 0.999) | (vp > 0.999)).sum()) * 100:.1f}%  "
+      f"surfaces (edges skipped): median |Δ| {np.median(code[flat]):.2f} codes, p95 {np.percentile(code[flat], 95):.2f} codes, "
+      f"≤1 code {np.mean(code[flat] <= 1.0) * 100:.1f}%  (1 code = {math.log(dmax / dmin) / 255 * 100:.2f}% of distance)  "
+      f"all geometry px ≤2 codes {np.mean(code[geo] <= 2.0) * 100:.1f}%")
 
 
-# ── 2. ảnh xem thử khi nhìn quanh ──
+# ── 2. look-around previews ──
 def view(pano, yaw, pitch, zoom, tw=VW, th=VH):
     cy, sy_, cp, sp = math.cos(math.radians(yaw)), math.sin(math.radians(yaw)), math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
     hf = F * cy + RT * sy_
