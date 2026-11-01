@@ -1,47 +1,47 @@
-# Feedback anh Hoa 17:20: bóng và ánh nến trên sàn phải thật hơn; quay 120 FPS
+# Feedback from Hoa 17:20: shadows and candlelight on the floor must look more real; record at 120 FPS
 
-Ảnh: `shadow-fake.png` (cùng thư mục).
+Image: `shadow-fake.png` (same folder).
 
-## 1. Bóng và ánh nến trên sàn (giao LIGHT; LIGHT nhận luôn `app/src/shaders/candleLight.ts` từ ATMOS)
+## 1. Shadows and candlelight on the floor (assigned to LIGHT; LIGHT also takes over `app/src/shaders/candleLight.ts` from ATMOS)
 
-Đang sai:
-- Ánh mặt cười trên sàn bị **xếp thành 3–4 dải ngang chồng nhau**, như nhiều bản sao lệch nhau. Nguyên nhân gần chắc là 16 nguồn điểm xếp theo 3 vòng cố định cùng điểm `hot` và `flameW` trong `candleLight.ts`: mỗi vòng nguồn sinh ra một bản sao hình miệng.
-- Dải sáng có vệt ngang giống răng cưa hoặc độ phân giải thấp của `lightMap`.
-- Bóng quả bí là một vệt tối hình elip, mép cứng, đậm đều. Không có bóng tiếp xúc ở chân bí.
+What's wrong:
+- The smiley-face light on the floor is **stacked into 3–4 overlapping horizontal bands**, like several offset copies. The cause is almost certainly the 16 point sources arranged in 3 fixed rings plus the `hot` point and `flameW` in `candleLight.ts`: each ring of sources produces a copy of the mouth shape.
+- The light band has horizontal streaks like aliasing or a low-resolution `lightMap`.
+- The pumpkin shadow is a dark elliptical blob, hard-edged, uniformly dense. No contact shadow at the pumpkin's foot.
 
-Muốn đạt:
-- **Ánh mặt cười trên sàn là một hình duy nhất** đúng phối cảnh: dài ra theo hướng xa bí, có đủ mắt, mũi, miệng.
-  - Mép sắc ở gần bí, càng xa càng mềm (bán ảnh tăng theo khoảng cách, đúng như nguồn sáng có kích thước).
-  - Độ sáng giảm theo 1/d².
-- Làm mềm bằng **lấy mẫu nhiều nguồn ngẫu nhiên liên tục** (khoảng 48–96 mẫu theo blue-noise hoặc Fibonacci trên nắp và thành trong, xoay mẫu theo pixel), không dùng vòng cố định.
-  - Map chỉ tính một lần mỗi khi mask đổi, nên tốn thêm mẫu cũng được.
-  - Thêm một lần blur nhẹ theo bán ảnh nếu cần. Tăng `lk` nếu map đang thô.
-- Ánh sáng **ăn vào vân gỗ**: nhân với albedo gỗ, khe giữa các ván tối hơn, và sàn ướt có một vệt bóng loáng (specular) ấm theo góc nhìn. Đừng chỉ cộng một lớp màu cam phẳng.
-- **Chập chờn theo ngọn lửa** mà không phải tính lại map: dịch và co giãn rất nhẹ, kèm độ sáng dao động theo nhiễu (cùng nhịp với lửa).
-- **Bóng quả bí:**
-  - Có bóng tiếp xúc rất tối và hẹp ngay chân bí (AO).
-  - Bóng đổ từ đèn hiên và trăng mềm dần theo khoảng cách, không còn mép elip cứng.
-  - Sau khi thắp, quanh chân bí có thêm quầng ấm hắt từ lòng bí qua lỗ khắc.
-  - Nếu cần sửa pass Blender (`shadow_lit` / `shadow_dark`) thì ghi đề xuất cho agent chính, hoặc làm bóng bằng shader.
-- Kiểm ở khung nghỉ mới, lúc nghiêng máy, và lúc sét. Giữ 120 fps.
+Target:
+- **The smiley-face light on the floor is a single shape** with correct perspective: stretched away from the pumpkin, with eyes, nose and mouth all present.
+  - Sharp edges near the pumpkin, softer further away (penumbra grows with distance, as with an area light).
+  - Brightness falls off as 1/d².
+- Soften by **sampling many continuous random sources** (about 48–96 samples via blue noise or Fibonacci over the lid and inner wall, rotating samples per pixel), not fixed rings.
+  - The map is only computed once per mask change, so extra samples are affordable.
+  - Add a light blur by penumbra if needed. Raise `lk` if the map is coarse.
+- The light **picks up the wood grain**: multiplied by the wood albedo, gaps between boards darker, and the wet floor gets a warm glossy streak (specular) depending on view angle. Don't just add a flat orange layer.
+- **Flicker with the flame** without recomputing the map: very slight shift and scale, plus brightness varying with noise (in sync with the flame).
+- **Pumpkin shadow:**
+  - A very dark, narrow contact shadow right at the pumpkin's foot (AO).
+  - Shadows cast from the porch lamp and the moon soften with distance, no more hard elliptical edge.
+  - After lighting, a warm glow around the pumpkin's foot cast from inside through the carved holes.
+  - If the Blender pass (`shadow_lit` / `shadow_dark`) needs fixing, write a proposal for the main agent, or do the shadows in a shader.
+- Check at the new rest frame, while tilting the device, and during lightning. Keep 120 fps.
 
-## 2. Quay 120 FPS (giao agent chính + PERF)
+## 2. Record at 120 FPS (assigned to the main agent + PERF)
 
-Thực tế máy:
-- Màn Mac đang ở **60 Hz** (4K, 60.00Hz), và `tools/simrec.sh` quay theo thời gian thật. Vì vậy simulator không cho ra 120 khung khác nhau mỗi giây khi quay trực tiếp.
-- App đã bật `CADisableMinimumFrameDurationOnPhone`.
+Machine reality:
+- The Mac display is at **60 Hz** (4K, 60.00Hz), and `tools/simrec.sh` records in real time. So the simulator can't produce 120 distinct frames per second when recorded directly.
+- The app already has `CADisableMinimumFrameDurationOnPhone` enabled.
 
-Cách quay 120 fps thật, mượt tuyệt đối: **quay chậm rồi nén thời gian.**
-- Thêm `EXPO_PUBLIC_TIMESCALE` (ví dụ 0.5 hoặc 0.25). **Mọi** chuyển động phải lấy từ một đồng hồ demo đã nhân hệ số này, gồm:
-  - kịch bản demo, camera, nét khắc, mưa, sét, hạt, dơi, lửa, nhún nhảy,
-  - mọi `withSpring` / `withTiming` dùng trong demo (đổi sang hàm của đồng hồ demo, hoặc nhân duration và cấu hình spring theo hệ số).
-- Quay simulator ở 60 fps thời gian thật với timescale 0.5: được 120 khung cho mỗi giây demo.
-  - `ffmpeg -i raw.mov -vf "setpts=0.5*PTS" -r 120 …`, rồi CFR 120.
-  - Timescale 0.25 cho dư khung, rồi lấy 120.
-- Âm thanh dựng riêng bằng `synth_audio.py` theo mốc thời gian, không bị ảnh hưởng.
-- Vì mỗi khung có gấp đôi thời gian để render, cách này còn **xoá luôn khựng** của simulator.
-- Kiểm bằng `mpdecimate`: bản 120 fps cuối phải có 120 khung khác nhau mỗi giây ở mọi đoạn.
+How to get real, perfectly smooth 120 fps: **record slowed down, then compress time.**
+- Add `EXPO_PUBLIC_TIMESCALE` (e.g. 0.5 or 0.25). **All** motion must come from a demo clock scaled by this factor, including:
+  - demo script, camera, carve strokes, rain, lightning, particles, bats, flame, bouncing,
+  - every `withSpring` / `withTiming` used in the demo (switch to functions of the demo clock, or scale durations and spring configs by the factor).
+- Record the simulator at 60 fps real time with timescale 0.5: gives 120 frames per demo second.
+  - `ffmpeg -i raw.mov -vf "setpts=0.5*PTS" -r 120 …`, then CFR 120.
+  - Timescale 0.25 gives spare frames, then take 120.
+- Audio is built separately by `synth_audio.py` from the timings, unaffected.
+- Since every frame gets twice the time to render, this also **removes the simulator's hitches**.
+- Verify with `mpdecimate`: the final 120 fps version must have 120 distinct frames per second in every segment.
 
-Xuất file:
-- Bản master: `render/promo/pumpkin-carve-demo-120.mp4` (120 fps).
-- Bản đăng X: X chỉ phát tối đa 60 fps, nên xuất thêm bản 60 fps lấy cách khung từ master (không blend). Khung 60 fps nào cũng là khung thật nên vẫn rất mượt.
+Output files:
+- Master: `render/promo/pumpkin-carve-demo-120.mp4` (120 fps).
+- X version: X plays at most 60 fps, so also export a 60 fps version by taking every other frame from the master (no blending). Every 60 fps frame is a real frame, so it's still very smooth.

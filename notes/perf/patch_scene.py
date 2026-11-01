@@ -12,15 +12,15 @@ rep('.then((img) => live && setLightMap(img));','.then((img) => live && setLight
 rep('  useImage,\n','')
 # 2) atmos on a low-density canvas
 m=re.search(r'const LIGHT_K = [^\n]*\n', s)
-s=s[:m.end()]+'/** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */\nconst ATMOS_DOWN = 3;\n'+s[m.end():]
+s=s[:m.end()]+'/** Fog (atmos.ts) draws on its own canvas at 1/ATMOS_DOWN pixel density, then scales back up: ATMOS_DOWN² times cheaper, and fog is soft anyway. */\nconst ATMOS_DOWN = 3;\n'+s[m.end():]
 rep('  const [fitState, setFitState] = useState<Fit>({ k: 1, ox: 0, oy: 0 });','  const [fitState, setFitState] = useState<Fit>({ k: 1, ox: 0, oy: 0 });\n  const [size, setSize] = useState({ w: 0, h: 0 });')
 rep('    fit.set(f);\n    setFitState(f);','    fit.set(f);\n    setFitState(f);\n    setSize({ w: width, h: height });')
-rep('  // lớp vẽ đè gắn với quả bí','''  // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
+rep('  // overlay layer attached to the pumpkin','''  // low-density fog canvas: same transform, divided by ATMOS_DOWN
   const fitTransformLow = useDerivedValue(() => {
     const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
     return [{ translateX: t[0].translateX! / ATMOS_DOWN }, { translateY: t[1].translateY! / ATMOS_DOWN }, { scale: t[2].scale! / ATMOS_DOWN }];
   });
-  // lớp vẽ đè gắn với quả bí''')
+  // overlay layer attached to the pumpkin''')
 a=s.index('              <Fill>\n                <Shader source={atmos}')
 e=s.index('          {ready && <IslandPill')
 block=s[a:e]
@@ -31,7 +31,7 @@ s=s[:a]+'''            </Group>
           )}
         </Canvas>
       </GestureDetector>
-      {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
+      {/* fog: canvas at 1/ATMOS_DOWN density, scaled back up by the view's transform */}
       {ready && size.w > 0 && (
         <View
           pointerEvents="none"
@@ -43,7 +43,7 @@ s=s[:a]+'''            </Group>
           </Canvas>
         </View>
       )}
-      {/* lớp trên sương: dơi, màn đen, ngón tay ảo, Dynamic Island */}
+      {/* layer above fog: bats, black screen, virtual finger, Dynamic Island */}
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
         {ready && (
           <Group transform={fitTransform}>

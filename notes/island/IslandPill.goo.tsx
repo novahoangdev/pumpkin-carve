@@ -20,17 +20,17 @@ import { VIEW } from "../scene/layout";
 import { GOO_MARGIN, islandGooEffect } from "../shaders/islandGoo";
 import { PERF, PerfHud } from "../perf/PerfHud";
 
-/** Thân bí chiếm bao nhiêu phần bề ngang ảnh skin (ảnh crop vuông). Chỉnh nếu bí mini to/nhỏ hơn bí thật lúc bàn giao. */
+/** Fraction of the skin image width taken by the pumpkin body (square-cropped image). Adjust if the mini pumpkin is bigger/smaller than the real one at handoff. */
 export const SKIN_BODY_FRAC = 0.8;
-/** Tâm thân bí lệch so với tâm ảnh skin (tỉ lệ cạnh ảnh, dương = xuống/phải). */
+/** Offset of the pumpkin body centre from the skin image centre (fraction of image side, positive = down/right). */
 export const SKIN_BODY_OFFSET = { x: 0, y: 0.04 };
-/** Bí mini to thêm bao nhiêu khi nằm trong pill đã nở. */
+/** How much the mini pumpkin grows when inside the expanded pill. */
 const MINI_GROW = 0.35;
 const IMG = MINI_BODY / SKIN_BODY_FRAC;
-const SNAP = 0.22; // s sau lúc nhả thì sợi goo đứt
+const SNAP = 0.22; // s after release when the goo strand snaps
 const EMPTY = Skia.PathBuilder.Make().build();
 
-// vùng vẽ shader goo (pt màn hình)
+// goo shader draw area (screen pt)
 const RX = ISLAND_CX - (ISLAND_OPEN.w * 1.1) / 2 - GOO_MARGIN.side;
 const RW = ISLAND_OPEN.w * 1.1 + GOO_MARGIN.side * 2;
 const RH = ISLAND.y + ISLAND_OPEN.h * 1.12 + GOO_MARGIN.below;
@@ -46,7 +46,7 @@ const smooth = (u: number) => {
   return x * x * (3 - 2 * x);
 };
 
-/** Lò xo tắt dần từ 0 → 1 (có vọt lố), t tính bằng giây. */
+/** Damped spring from 0 → 1 (with overshoot), t in seconds. */
 const spring = (t: number, w: number, z: number) => {
   "worklet";
   if (t <= 0) return 0;
@@ -59,7 +59,7 @@ const tri = (x: number) => {
   return Math.max(0, 1 - Math.abs(x));
 };
 
-// mặt jack-o'-lantern nhỏ, toạ độ quanh tâm thân bí, bề ngang thân = MINI_BODY. Mắt tách riêng để nháy.
+// small jack-o'-lantern face, coordinates around the pumpkin body centre, body width = MINI_BODY. Eyes are separate so they can blink.
 const EYE_Y = -0.1 * MINI_BODY;
 const { EYES, MOUTH } = (() => {
   const k = MINI_BODY;
@@ -86,7 +86,7 @@ const { EYES, MOUTH } = (() => {
 
 type Frame = {
   on: number;
-  // hình goo (đơn vị pt màn hình)
+  // goo shape (screen pt units)
   px: number;
   py: number;
   hw: number;
@@ -97,14 +97,14 @@ type Frame = {
   c2: number[];
   k: number[];
   glow: number[]; // rim, halo, core, t
-  // nội dung Live Activity
+  // Live Activity content
   content: number;
   mini: number;
   mx: number;
   my: number;
   mrot: number;
   ms: number;
-  eye: number; // scaleY mắt (nháy)
+  eye: number; // eye scaleY (blink)
   text: number;
   tx: number;
   ty: number;
@@ -141,13 +141,13 @@ const OFF: Frame = {
 type Anchor = { x: number; y: number; w: number };
 
 /**
- * Dynamic Island như chất lỏng đen (SDF smooth-min trong `islandGoo.ts`):
- *  1. bí bay tới → đảo vươn một giọt goo xuống đón, nuốt bí rồi nở thành Live Activity với độ nảy jelly;
- *  2. Live Activity: viền cam thở theo nhịp, bí mini có mặt sáng chập chờn như nến + nháy mắt, BOO! nảy ra;
- *  3. nhả: phình lên, rung nhẹ, co thắt, PHỤT bí ra bằng một sợi goo kéo dài rồi đứt như giọt mực,
- *     đảo nảy lại về đúng viên thuốc gốc, đen tuyền.
- * Giữ nguyên mốc ISLAND_TIMING. Vẽ bằng pt MÀN HÌNH, đặt trên cùng (ngoài Group scale cảnh).
- * `anchor` (tuỳ chọn) = anchor của usePumpkinJump để sợi goo bám đúng đỉnh bí đang rơi; thiếu thì lấy chỗ nghỉ mặc định.
+ * Dynamic Island as a black liquid (SDF smooth-min in `islandGoo.ts`):
+ *  1. pumpkin flies in → the island reaches down a goo drop to catch it, swallows the pumpkin, then opens into a Live Activity with a jelly bounce;
+ *  2. Live Activity: orange rim breathes rhythmically, mini pumpkin face glows with candle-like flicker + blinks, BOO! pops out;
+ *  3. release: swells, trembles slightly, contracts, SPITS the pumpkin out on a goo strand that stretches then snaps like an ink drop,
+ *     the island springs back to exactly the original pill, pure black.
+ * ISLAND_TIMING unchanged. Drawn in SCREEN pt, on top (outside the scene scale Group).
+ * `anchor` (optional) = usePumpkinJump's anchor so the goo strand sticks exactly to the falling pumpkin's top; if missing, the default rest spot is used.
  */
 export function IslandPill({
   islandT,
@@ -203,7 +203,7 @@ export function IslandPill({
     const top = ISLAND.y;
 
     if (tau < ISLAND_ARRIVE) {
-      // ── 1. đón: giọt goo vươn xuống, cuối cùng hớp lên chụp lấy quả bí ──
+      // ── 1. catch: goo drop reaches down, finally gulps up and grabs the pumpkin ──
       const u = smooth((tau - pre) / 0.24);
       w = bw * (1 + 0.04 * u);
       h = bh * (1 + 0.06 * u);
@@ -211,14 +211,14 @@ export function IslandPill({
       ax = ISLAND_CX + Math.sin(now * 7) * 1.5 * u;
       ay = bottom + 1 + 12 * u + Math.sin(now * 11) * 1.2 * u;
       ar = 6 + 6 * u;
-      ak = 15; // cổ dày, giọt dính liền vào đảo
+      ak = 15; // thick neck, drop stays attached to the island
       const g = smooth((tau - (ISLAND_ARRIVE - 0.09)) / 0.09);
       ay += (ISLAND_CY + 6 - ay) * g;
       ar += (16 - ar) * g;
       rim = 0.35 * u;
       halo = 0.3 * u;
     } else if (tau < ISLAND_SHAKE_AT) {
-      // ── 2. nuốt + nở Live Activity, nảy jelly, thở ──
+      // ── 2. swallow + open Live Activity, jelly bounce, breathe ──
       const gulp = smooth(ta / 0.2);
       ax = ISLAND_CX;
       ay = ISLAND_CY + 6 + 12 * gulp;
@@ -241,7 +241,7 @@ export function IslandPill({
       halo = on * (0.3 + 0.35 * breathe);
       core = on * (0.25 + 0.15 * breathe);
     } else if (tau < shakeEnd) {
-      // ── 3a. phình lên, rung nhẹ ──
+      // ── 3a. swell, slight tremble ──
       const u = (tau - ISLAND_SHAKE_AT) / ISLAND_TIMING.shake;
       const sw = smooth(u * 1.4);
       w = OW * (1 + 0.07 * sw);
@@ -254,7 +254,7 @@ export function IslandPill({
       halo = 0.65 + 0.35 * u;
       core = 0.4 + 0.5 * u;
     } else if (tau < ISLAND_SPIT_AT) {
-      // ── 3b. co thắt (bí bị ép xuống đáy, đáy phồng một cục) ──
+      // ── 3b. contract (pumpkin squeezed to the bottom, a bulge forms at the bottom) ──
       const u = (tau - shakeEnd) / ISLAND_TIMING.squeeze;
       const e = u * u;
       w = OW * 1.07 + (bw * 0.97 - OW * 1.07) * e;
@@ -267,7 +267,7 @@ export function IslandPill({
       halo = 1;
       core = 0.9;
     } else {
-      // ── 3c. PHỤT: sợi goo bám đỉnh bí đang rơi, kéo dài, đứt; đảo nảy về viên thuốc gốc ──
+      // ── 3c. SPIT: goo strand sticks to the top of the falling pumpkin, stretches, snaps; island springs back to the original pill ──
       const st = tau - ISLAND_SPIT_AT;
       const settle = 1 - smooth((st - 0.42) / 0.26);
       const bump = Math.exp(-6.5 * st) * Math.sin(20 * st) * settle;
@@ -278,7 +278,7 @@ export function IslandPill({
       halo = fade;
       core = 0.9 * fade * fade;
 
-      // đỉnh quả bí thật (cùng công thức M_FALL trong jump.ts)
+      // real pumpkin top (same formula as M_FALL in jump.ts)
       const A = anchor ? anchor.get() : { x: ISLAND_CX, y: VIEW.h * 0.78, w: 240 };
       const pTop = (tf: number) => {
         const g = JUMP.gravity;
@@ -309,7 +309,7 @@ export function IslandPill({
         ak = 8;
       } else {
         const s2 = st - SNAP;
-        // phần trên: mẩu goo còn treo bật ngược vào đảo (lò xo)
+        // upper part: the remaining goo stub springs back into the island
         const yS = Math.max(pTop(SNAP), bottom);
         const L = (yS - bottom) * 0.42 * (1 - spring(s2, 24, 0.32));
         const gone = smooth(s2 / 0.3);
@@ -321,7 +321,7 @@ export function IslandPill({
         ay = bottom + L;
         ar = 3.4 * (1 - gone);
         ak = 5;
-        // phần dưới: giọt mực rơi theo bí, đuôi rút lại thành giọt tròn rồi tan
+        // lower part: ink drop falls with the pumpkin, tail retracts into a round drop, then fades
         const shrink = 1 - smooth(s2 / 0.32);
         by = pTop(st) + 2 + 60 * s2 * s2;
         br = 5.5 * shrink;
@@ -337,7 +337,7 @@ export function IslandPill({
     const py = h >= bh ? top + h / 2 : ISLAND_CY;
     const px = ISLAND_CX + jx;
 
-    // ── nội dung Live Activity ──
+    // ── Live Activity content ──
     let mini = 0;
     let mx = px;
     let my = py;
@@ -349,7 +349,7 @@ export function IslandPill({
     let tsc = 1;
     let tyHop = 0;
     if (tau >= ISLAND_ARRIVE && tau < ISLAND_SPIT_AT) {
-      // bí bị nuốt (tối đi) rồi sáng lên ở khe trái; co thắt thì kéo về tâm, tắt dần để bàn giao cho bí thật
+      // pumpkin is swallowed (darkens) then lights up in the left slot; on contraction it's pulled to the centre and fades out to hand over to the real pumpkin
       mini = smooth((ta - 0.1) / 0.22) * (1 - smooth((tau - shakeEnd) / ISLAND_TIMING.squeeze));
       const k = spring(ta - 0.08, 14, 0.42);
       const back = smooth((tau - ISLAND_SHAKE_AT) / (ISLAND_SPIT_AT - ISLAND_SHAKE_AT));
@@ -412,7 +412,7 @@ export function IslandPill({
     return [{ translateX: f.mx }, { translateY: f.my }, { rotate: f.mrot }, { scale: f.ms }];
   });
   const eyeT = useDerivedValue(() => [{ translateY: EYE_Y }, { scaleY: F.get().eye }, { translateY: -EYE_Y }]);
-  // ánh nến bên trong: chập chờn nhiều tần số, mạnh hơn khi nến thật đã thắp
+  // inner candlelight: multi-frequency flicker, stronger once the real candle is lit
   const flicker = useDerivedValue(() => {
     const t = time.get();
     const fl = 0.8 + 0.1 * Math.sin(t * 13) + 0.07 * Math.sin(t * 29 + 1.3) + 0.05 * Math.sin(t * 47 + 0.4);
@@ -438,7 +438,7 @@ export function IslandPill({
     <>
       {PERF && <PerfHud time={time} />}
       <Group opacity={on}>
-        {/* đảo goo: thân đen + viền cam thở + quầng sáng ngoài */}
+        {/* goo island: black body + breathing orange rim + outer halo */}
         <Rect x={RX} y={0} width={rectW} height={RH}>
           <Shader source={islandGooEffect} uniforms={uniforms} />
         </Rect>
@@ -472,8 +472,8 @@ export function IslandPill({
 }
 
 /**
- * Vệt bay mờ cam khi bí lao vào / rơi ra khỏi đảo. Vẽ NGAY SAU (dưới) quả bí, pt màn hình.
- * `trail` lấy từ usePumpkinJump().trail.
+ * Faint orange flight trail as the pumpkin dives into / falls out of the island. Drawn RIGHT AFTER (below) the pumpkin, screen pt.
+ * `trail` comes from usePumpkinJump().trail.
  */
 export function JumpTrail({ trail, time }: { trail: SharedValue<number[]>; time: SharedValue<number> }) {
   const LIFE = 0.22;

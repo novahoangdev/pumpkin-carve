@@ -14,7 +14,7 @@
                    />
                  ))}
 -                <Particles bursts={bursts} time={time} litAt={litAt} />
-                 {/* vệt dao: khe cắt hở lộ thịt bí sáng màu, mép dưới đổ bóng tối, mép trên bắt sáng, nước bí ướt */}
+                 {/* knife trail: open cut slit showing bright flesh, dark shadow on the lower edge, highlight on the upper edge, wet juice */}
                  <Group transform={[{ translateX: 0.7 }, { translateY: 1.1 }]}>
                    <Path path={trail} style="stroke" strokeWidth={3.2} strokeCap="round" strokeJoin="round" color="#3a1404" opacity={0.75}>
 @@ -811,13 +810,14 @@

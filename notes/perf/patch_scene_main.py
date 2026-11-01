@@ -6,12 +6,12 @@ s=open(src).read()
 def rep(a,b):
     global s
     assert a in s, ("missing", a[:90]); s=s.replace(a,b,1)
-rep('const ATMOS_DOWN = 3;\n','const ATMOS_DOWN = 3;\n/** Canvas chính (nền, bí, mưa…) vẽ ở mật độ 1/MAIN_DOWN: 1.5 = 2x trên máy 3x (GPU làm ít hơn 2,25 lần). 1 = như cũ. */\nconst MAIN_DOWN = 1.5;\n')
-rep('  // canvas sương mật độ thấp','''  const fitTransformMain = useDerivedValue(() => {
+rep('const ATMOS_DOWN = 3;\n','const ATMOS_DOWN = 3;\n/** Main canvas (background, pumpkin, rain…) draws at 1/MAIN_DOWN density: 1.5 = 2x on a 3x device (GPU does 2.25× less work). 1 = as before. */\nconst MAIN_DOWN = 1.5;\n')
+rep('  // low-density fog canvas','''  const fitTransformMain = useDerivedValue(() => {
     const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
     return [{ translateX: t[0].translateX! / MAIN_DOWN }, { translateY: t[1].translateY! / MAIN_DOWN }, { scale: t[2].scale! / MAIN_DOWN }];
   });
-  // canvas sương mật độ thấp''')
+  // low-density fog canvas''')
 rep('''      <GestureDetector gesture={gesture}>
         <Canvas style={StyleSheet.absoluteFill}>
           {ready && (
@@ -25,11 +25,11 @@ rep('''      <GestureDetector gesture={gesture}>
             <Group transform={fitTransformMain}>''')
 rep('''        </Canvas>
       </GestureDetector>
-      {/* sương''','''        </Canvas>
+      {/* fog''','''        </Canvas>
       </View>
       )}
-      {/* sương''')
-rep('''      <Animated.View style={[StyleSheet.absoluteFill, uiStyle]}''','''      {/* nhận gesture trên toàn màn hình (pt màn hình), nằm trên các canvas, dưới UI */}
+      {/* fog''')
+rep('''      <Animated.View style={[StyleSheet.absoluteFill, uiStyle]}''','''      {/* receives gestures over the whole screen (screen pt), above the canvases, below the UI */}
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill} />
       </GestureDetector>

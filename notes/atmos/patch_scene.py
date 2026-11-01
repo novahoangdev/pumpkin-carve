@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""ATMOS → PumpkinScene.tsx (feedback 16:30 mục 1 + 2). Vá theo chuỗi neo, báo lỗi nếu không thấy neo.
+"""ATMOS → PumpkinScene.tsx (feedback 16:30 items 1 + 2). Patches by anchor string, errors out if an anchor is missing.
   python3 notes/atmos/patch_scene.py app/src/scene/PumpkinScene.tsx [out]
-1. Sương dùng độ sâu thật: import atmosDepth, aU lấy depthU (có dK, dpSize, dRange, pFwd, pRight, pRange), thêm 2 child
-   depthB, depthP sau skinLit.
-2. Mưa vẽ srcOver thay cho plus: rain.ts trả alpha > 0 ở sàn ướt để gỗ ướt tối đi (alpha = 0 ở chỗ khác → y như plus).
+1. Fog uses real depth: import atmosDepth, aU takes depthU (with dK, dpSize, dRange, pFwd, pRight, pRange), add 2 children
+   depthB, depthP after skinLit.
+2. Rain draws srcOver instead of plus: rain.ts returns alpha > 0 on the wet floor so wet wood darkens (alpha = 0 elsewhere → same as plus).
 """
 import sys
 
@@ -16,12 +16,12 @@ def rep(a, b, count=1):
     global s
     n = s.count(a)
     if n < 1:
-        sys.exit(f"không thấy neo: {a!r}")
+        sys.exit(f"anchor not found: {a!r}")
     s = s.replace(a, b, count)
 
 
 rep('import { atmos } from "../shaders/atmos";', 'import { atmosDepth } from "../shaders/atmos";')
-# aU: đổi viewU → depthU (chỉ trong aU)
+# aU: switch viewU → depthU (only inside aU)
 i = s.index("const aU = useDerivedValue(")
 j = s.index("...viewU.value,", i)
 s = s[:j] + "...depthU.value," + s[j + len("...viewU.value,"):]
