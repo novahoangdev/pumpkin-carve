@@ -55,10 +55,10 @@ const WALL_C = [FLAME_W[0] - AXIS[0] * 0.22, FLAME_W[1] - AXIS[1] * 0.22, FLAME_
 const WALL_R = 0.006;
 
 export const candleLight = Skia.RuntimeEffect.Make(`
-uniform shader maskBlur;   // mask khắc đã blur (px mask)
-uniform shader depthB;     // độ sâu ảnh gốc (log), px = pt · dK
+uniform shader maskBlur;   // blurred carve mask (mask px)
+uniform shader depthB;     // plate depth (log), px = pt · dK
 uniform shader mask;       // crisp carve mask (px mask): keeps teeth / corners that the 9 px blur erases
-uniform float  lk;         // px bản đồ trên mỗi pt
+uniform float  lk;         // map px per pt
 uniform float2 view;
 uniform float3 cam0;
 uniform float3 camX;

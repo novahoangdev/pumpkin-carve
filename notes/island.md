@@ -12,7 +12,7 @@ unchanged — only the drawing changed.
 | | Live Activity: mini pumpkin fades in from the black at center (swallowed) → springs to left slot; carved eyes/mouth glow with multi-frequency candle flicker, **blinks** at ta 0.78 / 1.32 / 1.46; **BOO!** pops in (spring 0→1 with overshoot + hop) and pulses |
 | 2.18 → 2.56 shake | pill **swells** (+7 % w, +10 % h), light tremble, rim brightens; content fades |
 | 2.56 → 2.69 squeeze | contracts to base size, a bulge forms at the bottom |
-| 2.69 → 3.39 spit | **PHỤT**: a goo strand from the pill bottom sticks to the top of the falling (real) pumpkin, thins, **snaps at +0.22 s**; upper remnant springs back into the island, lower part becomes a teardrop that falls with the pumpkin, its tail retracts, it shrinks away. Pill recoils (h +20 % bump) and settles **exactly** to `ISLAND` by +0.68 s; glow 0 by +0.38 s. Pure black pill, no text/blur left |
+| 2.69 → 3.39 spit | **SPIT**: a goo strand from the pill bottom sticks to the top of the falling (real) pumpkin, thins, **snaps at +0.22 s**; upper remnant springs back into the island, lower part becomes a teardrop that falls with the pumpkin, its tail retracts, it shrinks away. Pill recoils (h +20 % bump) and settles **exactly** to `ISLAND` by +0.68 s; glow 0 by +0.38 s. Pure black pill, no text/blur left |
 
 ## Implementation
 

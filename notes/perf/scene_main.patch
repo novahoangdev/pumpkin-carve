@@ -1,10 +1,10 @@
 --- a/app/src/scene/PumpkinScene.tsx	2026-10-31 16:07:53
 +++ b/app/src/scene/PumpkinScene.tsx	2026-10-31 16:09:50
 @@ -79,6 +79,8 @@
- const LIGHT_K = 1; // độ phân giải bản đồ ánh nến (px / pt ảnh gốc)
- /** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */
+ const LIGHT_K = 1; // candle-light map resolution (px / plate pt)
+ /** Fog (atmos.ts) draws on its own canvas at 1/ATMOS_DOWN pixel density, then scales back up: ATMOS_DOWN² times cheaper, and fog is soft anyway. */
  const ATMOS_DOWN = 3;
-+/** Canvas chính (nền, bí, mưa…) vẽ ở mật độ 1/MAIN_DOWN: 1.5 = 2x trên máy 3x (GPU làm ít hơn 2,25 lần). 1 = như cũ. */
++/** Main canvas (background, pumpkin, rain…) draws at 1/MAIN_DOWN density: 1.5 = 2x on a 3x device (GPU does 2.25× less work). 1 = as before. */
 +const MAIN_DOWN = 1.5;
  const clamp = (v: number, a: number, b: number) => {
    "worklet";
@@ -18,7 +18,7 @@
 +    const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
 +    return [{ translateX: t[0].translateX! / MAIN_DOWN }, { translateY: t[1].translateY! / MAIN_DOWN }, { scale: t[2].scale! / MAIN_DOWN }];
    });
-   // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
+   // low-density fog canvas: same transform, divided by ATMOS_DOWN
    const fitTransformLow = useDerivedValue(() => {
 @@ -754,10 +760,14 @@
  
@@ -44,14 +44,14 @@
 -      </GestureDetector>
 +      </View>
 +      )}
-       {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
+       {/* fog: canvas at 1/ATMOS_DOWN density, scaled back up by the view's transform */}
        {ready && size.w > 0 && (
          <View
 @@ -856,6 +867,10 @@
            {ready && <IslandPill islandT={jump.islandT} time={time} skin={skinLit} lit={candle} />}
        </Canvas>
  
-+      {/* nhận gesture trên toàn màn hình (pt màn hình), nằm trên các canvas, dưới UI */}
++      {/* receives gestures over the whole screen (screen pt), above the canvases, below the UI */}
 +      <GestureDetector gesture={gesture}>
 +        <View style={StyleSheet.absoluteFill} />
 +      </GestureDetector>

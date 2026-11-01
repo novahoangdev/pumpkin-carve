@@ -25,4 +25,4 @@
 +              <Gust layer="fg" time={time} basis={basis} />
                <Bats t0={batsAt} time={time} basis={basis} />
                <Fill color="black" opacity={blackout} />
-               {/* ngón tay ảo (chỉ demo) */}
+               {/* virtual finger (demo only) */}
