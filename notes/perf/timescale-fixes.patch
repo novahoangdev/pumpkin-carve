@@ -4,11 +4,11 @@
    return d / TIMESCALE;
  };
  
--/** Cấu hình spring theo đồng hồ demo: chậm lại TIMESCALE lần (k·s², c·s, cùng khối lượng) → cùng hình dạng chuyển động. */
+-/** Spring config on the demo clock: slowed down TIMESCALE times (k·s², c·s, same mass) → same motion shape. */
 +/**
-+ * Cấu hình spring theo đồng hồ demo: chậm lại TIMESCALE lần (k·s², c·s, cùng khối lượng) → cùng hình dạng chuyển động.
-+ * Mặc định phải là của Reanimated 4 (GentleSpringConfig: mass 4, damping 120, stiffness 900) — KHÔNG phải R3 (1/10/100):
-+ * withSpring({ damping: 7, stiffness: 120 }) cũ chạy với mass 4.
++ * Spring config on the demo clock: slowed down TIMESCALE times (k·s², c·s, same mass) → same motion shape.
++ * Defaults must be Reanimated 4's (GentleSpringConfig: mass 4, damping 120, stiffness 900) — NOT R3's (1/10/100):
++ * the old withSpring({ damping: 7, stiffness: 120 }) ran with mass 4.
 + */
  export const spring = (c: { damping?: number; stiffness?: number; mass?: number } = {}) => {
    "worklet";

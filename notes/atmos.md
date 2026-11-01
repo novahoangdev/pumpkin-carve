@@ -1,275 +1,275 @@
-# ATMOS: sương, khói, tia sáng, mưa, ánh nến
+# ATMOS: fog, smoke, light shafts, rain, candle light
 
-Agent phụ ATMOS. File giữ: `app/src/shaders/atmos.ts`, `rain.ts`, `candleLight.ts`, `app/src/fx/storm.ts`, `notes/atmos.md`.
-Không đụng file của agent chính, không cần đổi uniform hay child shader nào trong `PumpkinScene.tsx` (atmos chỉ dùng tập con
-uniform đang truyền; hình học cảnh được nhúng thành hằng số từ `layout.ts` và `build_scene.py`).
+ATMOS sub-agent. Files owned: `app/src/shaders/atmos.ts`, `rain.ts`, `candleLight.ts`, `app/src/fx/storm.ts`, `notes/atmos.md`.
+Doesn't touch the main agent's files, no need to change any uniform or child shader in `PumpkinScene.tsx` (atmos only uses a subset
+of the uniforms already passed; scene geometry is baked in as constants from `layout.ts` and `build_scene.py`).
 
-## 1. Sương, khói, tia sáng thành khối 3D thật (`atmos.ts`), đã xong
+## 1. Fog, smoke, light shafts as real 3D volumes (`atmos.ts`), done
 
-Feedback: "khói khi quay góc thì ảo và giả, không khớp ánh sáng và quả bí".
+Feedback: "the smoke looks fake and unreal when the view rotates, doesn't match the lighting or the pumpkin".
 
-Nguyên nhân trong bản cũ:
-- Sương là nhiễu 2D vẽ theo kinh/vĩ độ của hướng nhìn, giống một skybox bám theo mắt, nên khi nghiêng hay đi vòng quanh
-  bí thì không có parallax: trông như một tấm phẳng dán lên màn hình.
-- Tia sáng là radial blur của mask trong không gian màn hình, kéo từ ngọn lửa ra mọi hướng, nên vệt sáng hắt ngược lên tận
-  cánh cửa phía sau, không phụ thuộc sương ở đâu.
-- Ánh nến trong sương là một quầng màn hình `exp(-dist/120)`, nên sàn quanh bí "ấm" giả.
+Causes in the old version:
+- Fog was 2D noise drawn on the view direction's longitude/latitude, like a skybox stuck to the eye, so tilting or orbiting
+  the pumpkin had no parallax: it looked like a flat sheet stuck on the screen.
+- Light shafts were a screen-space radial blur of the mask, dragged from the flame in every direction, so the streaks shot back up all the way to
+  the door behind, regardless of where the fog was.
+- Candle light in the fog was a screen-space halo `exp(-dist/120)`, so the floor around the pumpkin was fake "warm".
 
-Bản mới dùng chung camera xem của cảnh (`viewRay`, `eye`, độ dịch khi bí nhảy `jW`) với nền và bí:
-- **Sương sát đất**: mật độ `σ = 0,95·n·exp(−h/0,24 m) + haze`, trong đó h là độ cao trên mặt thềm (z = 0), bậc trước (−0,2)
-  hoặc sân (−0,43). Phần exp được **tích phân giải tích** dọc tia nên không có hạt nhiễu và rất rẻ. Tia đi qua 2 đoạn: đoạn
-  gần (bậc và thềm, nằm dưới mái nên trăng không rọi thẳng) và đoạn xa (sân sau lan can, có trăng rọi). Nhiễu theo gió được
-  lấy ở các điểm tứ phân vị của khối sương trên tia, trong toạ độ thế giới, nên mảng sương đứng yên trong cảnh khi xoay hay
-  nghiêng máy, sương xa và gần trượt khác nhau đúng parallax. Tia kết thúc ở mặt cảnh (thềm, sân, tường sau) hoặc ở quả bí
-  (hình thật lấy từ alpha vỏ, độ sâu lấy từ ellipsoid), nên bí che sương đúng chỗ.
-- **Ánh sáng trong sương**: trời đêm và trăng (hướng `MOON_DIR` của Blender, bị mái che), đèn hiên (điểm, 1/d²), sét (hướng
-  tia sét, quả bí đổ bóng vào sương), vũng sáng mặt cười trên thềm hắt ngược lên lớp sương sát sàn. Pha tán xạ
-  Henyey–Greenstein (xấp xỉ Schlick): sương sáng hơn khi nhìn về phía nguồn sáng.
-- **Chùm sáng nến** (god rays): ray-march 6 mẫu trong đoạn tia nằm trong quả cầu 0,5 m quanh ngọn lửa, chỉ ở nửa không
-  gian phía trước quả bí. Mỗi mẫu kiểm tra đoạn mẫu→lửa có ra được qua lỗ khắc hay không: cắt vỏ ngoài ở lỗ VÀ đi xuyên
-  bề dày vỏ (1,7 cm) vẫn trong lỗ, nên vỏ dày chặn tia xiên. Ngọn lửa lấy mẫu như vật thể thật cỡ khoảng 2×3,5 cm, nên mép
-  chùm sáng mềm. Kết quả là chùm sáng có đúng hình lỗ khắc, đúng hướng, nằm đúng trong sương và đúng parallax.
-- **Khói nến**: sợi khói 3D bốc từ khe nắp quanh cuống (khí nóng thoát lên trên), lúc đầu thẳng (chảy tầng) rồi xoắn mạnh
-  dần, nghiêng theo gió (+x, cùng chiều trôi của sương). Đường tâm khói nằm trong toạ độ thế giới (tấm cong quay về phía mắt),
-  bị bí và cảnh che theo độ sâu, được khe nắp rọi ấm từ dưới, trăng và sét chiếu theo hướng.
-- Quầng đèn hiên và loé nến giờ tính theo góc giữa tia nhìn và nguồn sáng 3D, không dùng toạ độ màn hình nữa.
+The new version shares the scene's view camera (`viewRay`, `eye`, the pumpkin jump offset `jW`) with the background and pumpkin:
+- **Ground fog**: density `σ = 0.95·n·exp(−h/0.24 m) + haze`, where h is the height above the porch deck (z = 0), the front step (−0.2)
+  or the yard (−0.43). The exp part is **integrated analytically** along the ray, so no grain and very cheap. The ray crosses 2 segments: the near
+  segment (step and deck, under the roof so the moon doesn't hit it directly) and the far segment (yard behind the railing, moonlit). Wind noise is
+  sampled at the quartile points of the fog mass along the ray, in world coordinates, so fog patches stay put in the scene when rotating or
+  tilting the phone, and near and far fog slide differently with correct parallax. The ray ends at the scene surface (deck, yard, back wall) or at the pumpkin
+  (real shape from the rind alpha, depth from the ellipsoid), so the pumpkin occludes the fog in the right places.
+- **Lighting in the fog**: night sky and moon (Blender's `MOON_DIR` direction, blocked by the roof), porch light (point, 1/d²), lightning (bolt
+  direction, the pumpkin casts a shadow into the fog), the smiley-face light pool on the deck bouncing up into the low fog layer. Scattering phase
+  Henyey–Greenstein (Schlick approximation): fog is brighter when looking toward the light source.
+- **Candle light shafts** (god rays): 6-sample ray-march over the part of the ray inside a 0.5 m sphere around the flame, only in the half
+  space in front of the pumpkin. Each sample checks whether the sample→flame segment can get out through a carved hole: it hits the outer rind inside a hole AND crosses
+  the rind thickness (1.7 cm) still inside the hole, so the thick rind blocks oblique rays. The flame is sampled as a real body of about 2×3.5 cm, so the
+  shaft edges are soft. The result is shafts with the exact carved-hole shapes, the right direction, sitting properly in the fog with correct parallax.
+- **Candle smoke**: a 3D smoke wisp rising from the lid gap around the stem (hot air escaping upward), straight at first (laminar) then increasingly
+  twisting, leaning with the wind (+x, same direction as the fog drift). The smoke centreline is in world coordinates (a curved sheet facing the eye),
+  occluded by the pumpkin and scene by depth, lit warm from below by the lid gap, and directionally by the moon and lightning.
+- The porch-light halo and candle glow are now computed from the angle between the view ray and the 3D light source, no longer from screen coordinates.
 
-Hiệu năng (đo bằng CanvasKit WebGL trên GPU M5 Pro, 1320×2868, vẽ liền 40 khung rồi đồng bộ GPU một lần):
+Performance (measured with CanvasKit WebGL on an M5 Pro GPU, 1320×2868, 40 frames drawn back to back then one GPU sync):
 
-| | atmos | cả khung (nền + bí + mưa + atmos) |
+| | atmos | full frame (background + pumpkin + rain + atmos) |
 |---|---|---|
-| trước | 1,94 ms | 3,2–3,38 ms |
-| sau | 1,77 ms | 3,17 ms |
+| before | 1.94 ms | 3.2–3.38 ms |
+| after | 1.77 ms | 3.17 ms |
 
-Bản mới nhanh hơn bản cũ một chút: bỏ được 28 lần đọc mask mỗi pixel của radial blur và fbm 4 octave × 2. Đường đi đến
-đây: bản ray-march đầu tiên tốn 2,6 ms và còn nhiễu hạt, nên mới đổi sang tích phân giải tích và giới hạn vùng tính chùm sáng.
+The new version is slightly faster than the old one: it drops the radial blur's 28 mask reads per pixel and the 4-octave fbm × 2. How it got
+here: the first ray-march version cost 2.6 ms and was still grainy, hence the switch to analytic integration and a bounded region for the shafts.
 
-## 2. Ánh nến trên cảnh (`candleLight.ts`), đã xong
+## 2. Candle light on the scene (`candleLight.ts`), done
 
-- Trước: 5 điểm nguồn cố định (2 điểm trên nắp, 2 điểm thành sau, ngọn lửa), trọng số cộng vượt 1, nên trên thềm in ra 2
-  bản sao mặt cười cứng.
-- Sau: nguồn sáng đúng thực tế. Gồm ngọn lửa (điểm chói, cho tia hắt lên qua mắt), điểm nóng trên nắp ngay trên ngọn lửa
-  (lửa toả lên mạnh nhất, giữ hình mặt cười rõ trên thềm), và 16 điểm trên nắp trong và thành sau được lửa rọi (nguồn diện
-  tích, trọng số 1/d² tới lửa, chuẩn hoá). Bán ảnh trên thềm giờ mềm như nến thật, độ sáng giữ ngang bản cũ.
-- Chỉ tính lại khi mask khắc đổi (offscreen), nên không ảnh hưởng FPS.
+- Before: 5 fixed source points (2 on the lid, 2 on the back wall, the flame), weights summing above 1, so the deck showed 2
+  hard copies of the smiley face.
+- After: a physically correct light source. The flame (bright point, gives the rays bouncing up through the eyes), a hot spot on the lid right above the flame
+  (the flame radiates most strongly upward, keeps the smiley shape crisp on the deck), and 16 points on the inner lid and back wall lit by the flame (area
+  source, 1/d² weights to the flame, normalised). The penumbra on the deck is now soft like a real candle, brightness kept level with the old version.
+- Only recomputed when the carve mask changes (offscreen), so no FPS impact.
 
-## 3. Mưa (`rain.ts`), đã xong
+## 3. Rain (`rain.ts`), done
 
-- Sửa vị trí đèn hiên: trước đặt sai ở (0, 1.3, 1.9), giờ là (−0.08, 1.42, 1.32) đúng như `build_scene.py`.
-- Giọt mưa tán xạ mạnh về phía trước: nhìn ngược về phía trăng, tia sét, đèn hiên hay ngọn lửa thì vệt mưa sáng lấp lánh
-  hơn (ngược sáng); nhìn xuôi thì tối hơn. Áp dụng cho cả vệt mưa, dòng nhỏ giọt mép mái và gợn nước.
-- Phần hình học mưa (các lớp trụ quanh mắt, che theo độ sâu, không mưa dưới mái) vẫn giữ như cũ, vốn đã đúng phối cảnh.
+- Fixed the porch light position: it was wrongly at (0, 1.3, 1.9), now (−0.08, 1.42, 1.32) exactly as in `build_scene.py`.
+- Raindrops scatter strongly forward: looking back toward the moon, a lightning bolt, the porch light or the flame, the rain streaks sparkle
+  brighter (backlit); looking away they're darker. Applies to rain streaks, the roof-edge drip lines and ripples.
+- The rain geometry (cylinder layers around the eye, depth occlusion, no rain under the roof) is kept as before, it was already perspective-correct.
 
-## 4. Đợt 2 (16:15): hướng sét, grain
+## 4. Round 2 (16:15): lightning direction, grain
 
-- Sương, khói và mưa giờ được chiếu sáng theo hướng của cú sét đang đánh. Mưa đọc thẳng uniform `bolt`; atmos ở chế độ demo chọn
-  theo `STRIKES` và `time` (cùng đồng hồ với `storm.ts`), ở chế độ tương tác dùng hướng trung bình phía trời bên trái.
-- Atmos giờ vẽ ở 1/3 mật độ (`ATMOS_DOWN`, bản vá của PERF) nên giảm biên độ grain từ 0,035 xuống 0,02. Dither của chùm sáng đã
-  tính theo ô `floor(xy·3)` nên không bị to ra.
-- FPS trên sim ATMOS (`EXPO_PUBLIC_PERF=1`, bản debug, host tải nặng): đoạn sau khi thắp và nghiêng `ui` 43–60 fps, phần lớn ~52–60.
+- Fog, smoke and rain are now lit from the direction of the current lightning strike. Rain reads the `bolt` uniform directly; atmos in demo mode picks
+  from `STRIKES` and `time` (same clock as `storm.ts`), in interactive mode it uses an average direction from the left side of the sky.
+- Atmos now draws at 1/3 density (`ATMOS_DOWN`, PERF's patch) so grain amplitude is reduced from 0.035 to 0.02. The light-shaft dither is already
+  computed on `floor(xy·3)` cells so it doesn't get bigger.
+- FPS on the ATMOS sim (`EXPO_PUBLIC_PERF=1`, debug build, heavily loaded host): the after-lighting-and-tilt segment `ui` 43–60 fps, mostly ~52–60.
 
-## 5. Tia sét thật hơn (`fx/storm.ts`, `rain.ts`), 16:20 (feedback "sấm chớp giả")
+## 5. More realistic lightning (`fx/storm.ts`, `rain.ts`), 16:20 (feedback "fake thunder and lightning")
 
-- Trước: đường gấp khúc 16 điểm ngẫu nhiên đều, nét đều, không nhánh, trông như vẽ tay.
-- Sau: kênh chính 33 điểm dựng bằng midpoint displacement: khúc lớn gãy mạnh, khúc nhỏ lăn tăn, đúng kiểu fractal của sét thật.
-  Có 3 nhánh phụ tách ra ở nửa trên, chĩa xuống chéo ra ngoài, mảnh và mờ dần về đầu nhánh. Lõi trắng mảnh, quầng xanh tím
-  trong mưa và mây; nhánh mảnh hơn, tối hơn. Vẫn chỉ vẽ trên vùng trời (độ sâu > 60 m), nên mái, cây, nhà che đúng.
-- Định dạng `bolt`: `[az, el, w]` × `BOLT_N` (= 62); 2 phần tử đầu là khung bao để shader bỏ qua pixel ở xa. `PumpkinScene` không
-  cần đổi gì (vẫn `bolt.value.flat()` và `boltPoints(...)`).
-- `STRIKES`, `flashCurve`, `currentStrike` giữ nguyên, nên `synth_audio.py` không bị ảnh hưởng.
+- Before: a 16-point zigzag with uniform random points, uniform stroke, no branches, looked hand-drawn.
+- After: a 33-point main channel built with midpoint displacement: big segments break hard, small ones jitter, the real fractal look of lightning.
+  3 side branches split off in the upper half, pointing down and outward, thin and fading toward their tips. Thin white core, blue-violet halo
+  in the rain and clouds; branches thinner and dimmer. Still only drawn over the sky (depth > 60 m), so the roof, trees and houses occlude correctly.
+- `bolt` format: `[az, el, w]` × `BOLT_N` (= 62); the first 2 elements are a bounding box so the shader skips far pixels. `PumpkinScene` doesn't
+  need any change (still `bolt.value.flat()` and `boltPoints(...)`).
+- `STRIKES`, `flashCurve`, `currentStrike` unchanged, so `synth_audio.py` is not affected.
 
 
-## 6. Feedback 16:30 mục 1 + 2 (sương lỗi layer, nước giả), 16:50. CẦN AGENT CHÍNH GỘP PATCH
+## 6. Feedback 16:30 items 1 + 2 (fog layer bug, fake water), 16:50. MAIN AGENT NEEDS TO MERGE THE PATCH
 
-**Gộp (chỉ JS, không build native):**
+**Merge (JS only, no native build):**
 
 ```bash
-python3 notes/atmos/patch_scene.py app/src/scene/PumpkinScene.tsx      # vá theo chuỗi neo, báo lỗi nếu không thấy neo
+python3 notes/atmos/patch_scene.py app/src/scene/PumpkinScene.tsx      # patches by anchor string, errors out if an anchor is missing
 cd app && npx tsc --noEmit && npx eslint src/scene/PumpkinScene.tsx
 ```
 
-Patch đổi 4 chỗ trong `PumpkinScene.tsx` (đã thử trên bản sao + sim ATMOS, tsc/eslint sạch):
+The patch changes 4 places in `PumpkinScene.tsx` (tested on a copy + the ATMOS sim, tsc/eslint clean):
 1. `import { atmos }` → `import { atmosDepth }`
-2. trong `aU`: `...viewU.value` → `...depthU.value` (thêm dK, dpSize, dRange, pFwd, pRight, pRange)
-3. `<Shader source={atmosDepth} …>`: thêm 2 child `<ImageShader image={depthB} tx="clamp" ty="clamp" />`,
-   `<ImageShader image={depthP} … />` sau `skinLit`
-4. mưa: `<Fill blendMode="plus">` → `<Fill>` (srcOver). `rain.ts` trả alpha = 0 ở mọi chỗ trừ sàn ướt, nên ngoài sàn ướt kết quả
-   y hệt plus; alpha > 0 ở sàn ướt làm gỗ ướt tối đi.
+2. in `aU`: `...viewU.value` → `...depthU.value` (adds dK, dpSize, dRange, pFwd, pRight, pRange)
+3. `<Shader source={atmosDepth} …>`: add 2 children `<ImageShader image={depthB} tx="clamp" ty="clamp" />`,
+   `<ImageShader image={depthP} … />` after `skinLit`
+4. rain: `<Fill blendMode="plus">` → `<Fill>` (srcOver). `rain.ts` returns alpha = 0 everywhere except the wet floor, so outside the wet floor the result is
+   identical to plus; alpha > 0 on the wet floor darkens the wet wood.
 
-Chưa gộp thì vẫn chạy (file đã ở trong dự án): `atmos` cũ vẫn export với giao diện cũ (đã sửa ánh sáng), mưa với plus thì có
-phản chiếu, gợn, giọt nhưng gỗ chưa tối đi. Lỗi "dải sương dán đè lên cột" chỉ hết hẳn sau khi gộp (cần độ sâu thật).
+Unmerged, it still runs (the files are already in the project): the old `atmos` is still exported with the old interface (lighting fixed), rain with plus has
+reflections, ripples and drips but the wood doesn't darken yet. The "fog band pasted over the post" bug only goes away fully after merging (needs real depth).
 
-**Mục 1, sương** (`atmos.ts`, export mới `atmosDepth`):
-- Nguyên nhân: sương cũ không biết độ sâu thật, nên tia nhìn ra sân xuyên qua cả lan can; mép cứng là chỗ tia đổi từ "chạm
-  sàn thềm" sang "ra sân"; sương ngoài sân lại được trăng chiếu với tán xạ thuận gấp ~4,7 lần, nên thành dải xanh cháy sáng.
-- Giờ: điểm cuối tia lấy từ `bg_depth` / `bg_depth_pano` (`reproject`, khoảng cách thật từ mắt). Mật độ là tích phân giải tích
-  `exp(−h/H)` dọc tia: dưới mái H = 0,24 m tính từ mặt thềm; ngoài sân lớp dày hơn (H ≈ 0,4 m × nhiễu, tính từ mặt sân −0,43).
-  Haze nền cũng giảm theo độ cao (1,5 m), nên bầu trời không bị phủ mờ. Cột gần gần như không có sương, xa ngoài sân sương dày,
-  cửa sổ nhà bên mờ đi sau lớp sương. Đỉnh lớp sương nhấp nhô theo nhiễu neo trong toạ độ thế giới, không còn mép nào.
-- Ánh sáng: sương không sáng hơn mặt đất được trăng rọi (trời + trăng ≈ 0,2–0,38, tán xạ thuận nhẹ); ấm lên quanh đèn hiên
-  (1/d²) và quanh bí khi đã thắp; khi có sét thì sáng vừa phải.
+**Item 1, fog** (`atmos.ts`, new export `atmosDepth`):
+- Cause: the old fog didn't know the real depth, so view rays toward the yard went straight through the railing; the hard edge is where the ray switches from "hits
+  the deck floor" to "goes out to the yard"; the fog out in the yard was also moonlit with ~4.7× forward scattering, so it became a blown-out blue band.
+- Now: the ray end point comes from `bg_depth` / `bg_depth_pano` (`reproject`, real distance from the eye). Density is the analytic integral of
+  `exp(−h/H)` along the ray: under the roof H = 0.24 m from the deck surface; out in the yard the layer is thicker (H ≈ 0.4 m × noise, from the yard surface at −0.43).
+  The background haze also falls off with height (1.5 m), so the sky isn't hazed over. The near post has almost no fog, the far yard has thick fog,
+  the neighbouring house windows dim behind the fog layer. The top of the fog layer undulates with noise anchored in world coordinates, no more edges.
+- Lighting: fog is no brighter than the moonlit ground (sky + moon ≈ 0.2–0.38, mild forward scattering); warms up around the porch light
+  (1/d²) and around the pumpkin once lit; moderately bright during lightning.
 
-**Mục 2, nước** (`rain.ts`, toàn bộ là hàm của thời gian trong shader, không có hạt CPU):
-- Bỏ: quầng xanh phát sáng (sương cũ + gợn mưa chiếu sáng như nguồn sáng); dòng nhỏ giọt có độ sáng nền 0,2 không đổi (các
-  "gạch đứng yên" ở mép sàn).
-- Sàn ướt: lấy giao tia với mặt phẳng sàn (z = 0, ngoài thềm là sân −0,43), đối chiếu ảnh độ sâu để không đè lên cột, lan can, bí.
-  Vùng ướt bám mép ngoài theo phần mái che (lan can sau ~0,5 m, mép trái ~0,3 m, mép trước ~0,22 m); vũng không đều, kéo dài
-  theo thớ ván; sân ngoài ướt hết. Gỗ ướt tối đi (alpha 0,38, cần patch 4).
-- Phản chiếu Fresnel (Schlick, F0 nước 0,02, càng xiên càng mạnh): trời, đĩa trăng (hướng lấy từ panorama), đèn hiên, cửa sổ nhà
-  mình, ô kính cửa, cửa sổ hai nhà bên (vị trí 3D dò từ `bg_dark_pano.jpg` + `bg_depth_pano.png`), ảnh quả bí khi thắp, chớp sét.
-  Phản chiếu kéo dọc như mặt ướt thật, bị mái che khi điểm nằm dưới mái, độ nhám giảm ở chỗ đọng thành vũng.
-- Gợn mưa: lưới ô 0,16 m trong toạ độ thế giới, mỗi ô một giọt với chu kỳ 0,8–1,7 s. Vòng loang ra rồi tắt (~0,5 s), khoảng
-  20–30 vòng cùng lúc ở dải ướt. Normal của gợn làm méo phản chiếu; hạt bắn sống 0,12 s.
-- Giọt nước nhỏ từ thanh trên lan can (z 0,84) và mép mái trái (z 2,8): từng giọt treo, lớn dần, rơi tự do (g = 9,8), nhoè theo
-  vận tốc. Giọt từ lan can chạm thềm thì sinh gợn đúng chỗ, đúng thời điểm.
-- Ghi chú: dải sáng xanh nhạt ở mép thềm ngoài lan can và các đốm vàng trên mép ướt nằm sẵn trong ảnh nền Blender (`bg_*.jpg`). Nếu
-  anh Hoa vẫn thấy chúng chói thì phải giảm độ bóng hoặc sáng của vật liệu mép ướt trong pass Blender (việc của agent chính).
+**Item 2, water** (`rain.ts`, everything is a function of time in the shader, no CPU particles):
+- Removed: the glowing blue halo (old fog + rain ripples lit like light sources); drip lines with a constant base brightness of 0.2 (the
+  "static dashes" at the floor edge).
+- Wet floor: ray intersection with the floor plane (z = 0, beyond the deck the yard at −0.43), checked against the depth image so it doesn't paint over the post, railing, pumpkin.
+  The wet area hugs the outer edge following the roof coverage (back railing ~0.5 m, left edge ~0.3 m, front edge ~0.22 m); uneven puddles, stretched
+  along the board grain; the yard outside is fully wet. Wet wood darkens (alpha 0.38, needs patch 4).
+- Fresnel reflections (Schlick, water F0 0.02, stronger at grazing angles): sky, moon disc (direction from the panorama), porch light, our own house's
+  windows, the door glass, the two neighbouring houses' windows (3D positions found from `bg_dark_pano.jpg` + `bg_depth_pano.png`), the pumpkin image once lit, lightning flashes.
+  Reflections stretch vertically like a real wet surface, are blocked by the roof when the point is under it, and roughness drops where water pools into puddles.
+- Rain ripples: a 0.16 m cell grid in world coordinates, one drop per cell with a 0.8–1.7 s period. Rings spread then fade (~0.5 s), about
+  20–30 rings at once in the wet strip. Ripple normals distort the reflections; splash particles live 0.12 s.
+- Water drips from the railing's top rail (z 0.84) and the left roof edge (z 2.8): each drop hangs, grows, falls freely (g = 9.8), motion-blurred by
+  velocity. Drops from the railing hitting the deck spawn ripples at the right spot, at the right time.
+- Note: the pale blue bright strip at the deck edge outside the railing and the yellow specks on the wet edge are baked into the Blender background images (`bg_*.jpg`). If
+  Hoa still finds them too bright, the gloss or brightness of the wet-edge material has to be reduced in the Blender pass (main agent's job).
 
-**Hiệu năng** (CanvasKit WebGL, GPU M5 Pro, 1320×2868, vẽ liền 40 khung):
+**Performance** (CanvasKit WebGL, M5 Pro GPU, 1320×2868, 40 frames back to back):
 
-| | trước | sau |
+| | before | after |
 |---|---|---|
-| mưa + nước (full-res) | 0,87 ms | 0,97 ms |
-| atmos (tính ở full-res; trong app vẽ ở 1/3 mật độ nên ÷9) | 1,22 ms | 1,70 ms (~0,19 ms trong app) |
+| rain + water (full-res) | 0.87 ms | 0.97 ms |
+| atmos (computed at full-res; in the app drawn at 1/3 density so ÷9) | 1.22 ms | 1.70 ms (~0.19 ms in the app) |
 
-Cả khung trong app tăng khoảng 0,15 ms trên M5 Pro. Chưa đo được trên 17 Pro Max thật: cần agent chính hoặc PERF đo bản
-Release sau khi gộp.
+The full frame in the app goes up by about 0.15 ms on the M5 Pro. Not yet measured on a real 17 Pro Max: needs the main agent or PERF to measure the
+Release build after merging.
 
-**Ảnh trước/sau** (`notes/atmos/`): `sim_yaw-0.66_truoc-sau.jpg` (sim, lúc sét), `sim_yaw+0.62_truoc-sau.jpg`,
-`render_yaw-0.66_truoc-sau.jpg`, `render_yaw+0.62_truoc-sau.jpg` (renderer WebGL, cùng camera, không sét),
-`chan-lan-can_truoc-sau.jpg` (cận chân lan can).
+**Before/after images** (`notes/atmos/`): `sim_yaw-0.66_before-after.jpg` (sim, during lightning), `sim_yaw+0.62_before-after.jpg`,
+`render_yaw-0.66_before-after.jpg`, `render_yaw+0.62_before-after.jpg` (WebGL renderer, same camera, no lightning),
+`railing-base_before-after.jpg` (close-up of the railing base).
 
-## Bàn giao `candleLight.ts` cho LIGHT (17:20)
+## Handing `candleLight.ts` over to LIGHT (17:20)
 
-Từ 17:20, `app/src/shaders/candleLight.ts` do agent LIGHT giữ; ATMOS không sửa file này nữa. Không có thay đổi dở. Bản hiện tại
-trong dự án là bản cuối của ATMOS (mục 2 ở trên): ngọn lửa (điểm) + điểm nóng trên nắp ngay trên lửa + 16 điểm trên nắp trong và
-thành sau (nguồn diện tích, trọng số 1/d² tới lửa, chuẩn hoá), đầu ra R = L/6 như cũ.
+From 17:20, `app/src/shaders/candleLight.ts` is owned by the LIGHT agent; ATMOS no longer edits this file. No changes in progress. The current version
+in the project is ATMOS's final one (item 2 above): the flame (point) + hot spot on the lid right above the flame + 16 points on the inner lid and
+back wall (area source, 1/d² weights to the flame, normalised), output R = L/6 as before.
 
-## Ghi chú cho quay 120 fps (FEEDBACK-1720 mục 2)
+## Notes for the 120 fps recording (FEEDBACK-1720 item 2)
 
-Mọi chuyển động của ATMOS (sương trôi, khói xoắn, mưa rơi, gợn, giọt nhỏ, nhịp sét `flashCurve`/`currentStrike`, chọn hướng sét
-theo `STRIKES` trong atmos) đều chỉ là hàm của uniform `time` / tham số `t` lấy từ đồng hồ cảnh (`time.value`). Chỉ cần đồng hồ
-demo đã nhân `EXPO_PUBLIC_TIMESCALE` là ATMOS chậm theo đúng, không cần sửa gì thêm. `STRIKES[].t` là giây của đồng hồ demo.
+All ATMOS motion (fog drift, smoke twist, rainfall, ripples, drips, the `flashCurve`/`currentStrike` lightning timing, choosing the lightning direction
+from `STRIKES` in atmos) is purely a function of the `time` uniform / the `t` parameter taken from the scene clock (`time.value`). As long as the demo clock
+is already multiplied by `EXPO_PUBLIC_TIMESCALE`, ATMOS slows down correctly, nothing else to change. `STRIKES[].t` is in demo-clock seconds.
 
-## Đề xuất cho FX / agent chính (file không phải của ATMOS)
+## Proposals for FX / the main agent (files not owned by ATMOS)
 
-**A. Khói que diêm (`fx/Match.tsx`) nhiều khả năng chính là "cái khói ảo khi quay góc" mà chủ dự án nhắc.** Hiện các cụm khói là
-sprite theo toạ độ màn hình (`S.x`, `S.y` = chỗ que tắt trên màn hình) và sống khoảng 3,5 s. Camera bắt đầu nghiêng 1,2 s sau khi
-thắp, nên khói đứng yên trên màn hình trong khi quả bí trượt đi. Sửa: neo vào thế giới.
+**A. The match smoke (`fx/Match.tsx`) is most likely the "fake smoke when the view rotates" the project owner mentioned.** The smoke puffs are currently
+screen-space sprites (`S.x`, `S.y` = where the match went out on screen) and live about 3.5 s. The camera starts tilting 1.2 s after
+lighting, so the smoke stays still on screen while the pumpkin slides away. Fix: anchor it in the world.
 
 ```ts
-// lúc lửa tắt: điểm thế giới ngay trước mặt bí dưới đầu que (lùi 1,5 cm về phía mắt)
+// when the flame goes out: world point right in front of the pumpkin under the match head (1.5 cm back toward the eye)
 const bb = basis?.value ?? BASE_BASIS;
 const sx = (X - VIEW.w / 2) / bb.f, sy = -(Y - VIEW.h / 2) / bb.f;
 const d = [0, 1, 2].map((i) => bb.x[i] * sx + bb.y[i] * sy - bb.z[i]);
 const p = pumpkinHit(bb.e, d), L = Math.hypot(d[0], d[1], d[2]);
 smoke.set({ t, w: [0, 1, 2].map((i) => p[i] - (d[i] / L) * 0.015) });
-// mỗi frame: cụm khói bay lên theo mét rồi chiếu qua camera xem (M ≈ D0 / F0 ≈ 0,0014 m/pt để giữ nhịp cũ)
+// every frame: smoke puffs rise in metres then project through the view camera (M ≈ D0 / F0 ≈ 0.0014 m/pt to keep the old pace)
 const wz = S.w[2] + (4 + 16 * a + 6 * a * a) * M;
 const wx = S.w[0] + (Math.sin(te * 6 + a * 2.4 + ph) * (0.6 + 4.5 * a) + a * a * 2.5 * drift) * M;
-proj(basis?.value ?? BASE_BASIS, wx, S.w[1], wz, o);   // o[0], o[1] = màn hình; cỡ sprite nhân o[3] / k0
+proj(basis?.value ?? BASE_BASIS, wx, S.w[1], wz, o);   // o[0], o[1] = screen; sprite size times o[3] / k0
 ```
 
-Nếu không kịp sửa thì cách rẻ nhất: giảm `SMOKE_LIFE` xuống khoảng 0,9 s để khói tan trước khi camera nghiêng. Sợi khói nến 3D
-trong atmos sẽ lo phần khói còn lại.
+If there's no time for the fix, the cheapest option: reduce `SMOKE_LIFE` to about 0.9 s so the smoke clears before the camera tilts. The 3D candle smoke wisp
+in atmos covers the rest of the smoke.
 
-**B. `fx/pfx_atlas.ts`: `CX0 = 201, CY0 = 437` là tâm của khung cũ 402×874.** Khung hiện là 440×956 (`layout.json` view, f = 672),
-nên `proj`, `pumpkinWorld` và `baseToFloor` lệch khoảng 19 pt ngang, 41 pt dọc. Nên dùng `VIEW.w / 2`, `VIEW.h / 2`.
+**B. `fx/pfx_atlas.ts`: `CX0 = 201, CY0 = 437` is the centre of the old 402×874 frame.** The frame is now 440×956 (`layout.json` view, f = 672),
+so `proj`, `pumpkinWorld` and `baseToFloor` are off by about 19 pt horizontally, 41 pt vertically. Should use `VIEW.w / 2`, `VIEW.h / 2`.
 
-## Cách xem
+## How to view
 
-- Sim riêng "Pumpkin Atmos 17 Pro Max" (EA6AE9EA-…), Metro port 8094, `EXPO_PUBLIC_DEMO=1`. Thấy rõ nhất ở đoạn sau khi
-  thắp nến lúc camera nhìn quanh và nghiêng: sương ngoài sân, sợi khói trên cuống, hình mặt cười trên thềm.
-- Ảnh so sánh và bộ render WebGL nằm trong scratchpad của phiên ATMOS (render cả cảnh ở mọi góc với các shader thật, có đo ms).
+- Own sim "Pumpkin Atmos 17 Pro Max" (EA6AE9EA-…), Metro port 8094, `EXPO_PUBLIC_DEMO=1`. Most visible in the segment after
+  the candle is lit while the camera looks around and tilts: fog in the yard, the smoke wisp above the stem, the smiley face on the deck.
+- Comparison images and the WebGL renderer live in the ATMOS session's scratchpad (renders the whole scene from any angle with the real shaders, with ms timings).
 
-## Lưu ý cho agent chính
+## Notes for the main agent
 
-- Hằng số hình học trong `atmos.ts` lấy theo `build_scene.py`: thềm x −2,62…5,35, y −0,62…1,55; tường sau y = 1,55 từ
-  x > −0,30; sân z = −0,43; đèn hiên (−0,08, 1,42, 1,32); `MOON_DIR`. Nếu đổi bố cục Blender thì sửa các hằng này
-  (hoặc đưa vào `layout.json`).
-- Không cần build native. Không đổi file nào ngoài các file ATMOS giữ.
+- Geometry constants in `atmos.ts` follow `build_scene.py`: deck x −2.62…5.35, y −0.62…1.55; back wall y = 1.55 from
+  x > −0.30; yard z = −0.43; porch light (−0.08, 1.42, 1.32); `MOON_DIR`. If the Blender layout changes, update these constants
+  (or move them into `layout.json`).
+- No native build needed. No files changed outside those ATMOS owns.
 
-## 7. Sương ở khung nghỉ mới (REST oy −0.08, mắt thấp ~0,28 m)
+## 7. Fog at the new rest frame (REST oy −0.08, low eye ~0.28 m)
 
-- Lỗi: ở khung nghỉ mới, mắt ở sát sàn nên tia nhìn đi qua lớp sương dưới mái ngay từ ống kính, tạo một màn xám phủ nửa dưới màn hình (rõ nhất khi bí đã thắp).
-- Sửa trong `atmos.ts`:
-  - `tA` 0.06 → 0.45: bỏ 45 cm sương đầu tiên trước ống kính (sương thật không bám vào ống kính).
-  - `SIG` dưới mái 0.95 → 0.6: mái che mưa và gió nên dưới hiên ít sương hơn ngoài sân.
-  - Hệ số tia nến 0.12 → 0.18: bù cho mật độ thấp hơn để tia sáng qua mắt và miệng vẫn thấy rõ.
-- Sương ngoài sân và sau lan can không đổi.
-- Hiệu năng: không thêm mẫu nào, chi phí như cũ.
-- Ảnh:
-  - `atmos/render_khung-nghi_truoc-sau.jpg` (cũ | mới, thắp | nghiêng).
-  - `atmos/sim_khung-nghi_suong-gan.jpg` (sim: chưa thắp | thắp).
+- Bug: at the new rest frame the eye is close to the floor, so the view ray passes through the under-roof fog layer right from the lens, creating a grey veil over the lower half of the screen (most visible once the pumpkin is lit).
+- Fixed in `atmos.ts`:
+  - `tA` 0.06 → 0.45: skip the first 45 cm of fog in front of the lens (real fog doesn't cling to the lens).
+  - `SIG` under the roof 0.95 → 0.6: the roof shelters from rain and wind, so there's less fog under the porch than out in the yard.
+  - Candle shaft factor 0.12 → 0.18: compensates for the lower density so the shafts through the eyes and mouth stay clearly visible.
+- Fog in the yard and behind the railing unchanged.
+- Performance: no extra samples, same cost.
+- Images:
+  - `atmos/render_rest-frame_before-after.jpg` (old | new, lit | tilted).
+  - `atmos/sim_rest-frame_near-fog.jpg` (sim: not lit | lit).
 
-## 8. Polish trước 20:45 (đăng X 23:00)
+## 8. Polish before 20:45 (X post at 23:00)
 
-Kiểm bản hiện tại của agent chính (18:15):
-- Đã gộp đủ: `atmosDepth` + depthB/depthP, mưa `<Fill>` srcOver, canvas sương 1/3 mật độ, `fOff` (flameFollow) trong atmos.ts.
-- Không còn mép cứng của lớp sương.
-- Không còn quầng xanh trên sàn.
+Checked the main agent's current build (18:15):
+- Fully merged: `atmosDepth` + depthB/depthP, rain `<Fill>` srcOver, fog canvas at 1/3 density, `fOff` (flameFollow) in atmos.ts.
+- No more hard edge on the fog layer.
+- No more blue halo on the floor.
 
-Lỗi còn lại tìm thấy:
-1. **Sân nhìn như mặt hồ (yaw −0,66, nhất là lúc sét).**
-   - Nguyên nhân: tia gần nằm ngang đi qua lớp sương sát đất rất dài, nên sương sân gần như đục và phẳng.
-   - Mỗi điểm ảnh lấy 1 mẫu nhiễu ở điểm nhảy xa theo hàng màn hình, nên ra vệt ngang như gợn nước.
-   - Tách lớp đã xác nhận: nền sạch, chỉ lớp sương tạo ra mặt hồ này.
-2. **Phản chiếu cửa sổ nhà mình / kính cửa ở chân lan can sau là đốm cam tròn**, trông như phát sáng.
-3. **Gợn mưa và giọt từ mái / lan can gần như không thấy**: gợn bị dẹt còn ~3 pt ở góc sát; giọt ~1 pt.
-4. **Ở khung nghỉ, sàn gần ống kính khô hoàn toàn**, không có vẻ "tối và bóng".
+Remaining bugs found:
+1. **The yard looks like a lake surface (yaw −0.66, especially during lightning).**
+   - Cause: near-horizontal rays travel a very long way through the ground fog, so the yard fog is nearly opaque and flat.
+   - Each pixel takes 1 noise sample at a point that jumps far along a screen row, giving horizontal streaks like water ripples.
+   - Layer isolation confirmed: the background is clean, only the fog layer creates this lake surface.
+2. **Reflections of our house's window / door glass at the base of the back railing are round orange blobs**, looking like they glow.
+3. **Rain ripples and drips from the roof / railing are nearly invisible**: ripples get squashed to ~3 pt at grazing angles; drips ~1 pt.
+4. **At the rest frame, the floor near the lens is completely dry**, with no "dark and glossy" look.
 
-Sửa trong atmos.ts:
-- Sương sân lấy trung bình nhiễu ở 2 điểm tứ phân vị (hết vệt ngang).
-- Thêm đốm lớn ~3 m trôi chậm, để sân tối và chân nhà hàng xóm lộ ra giữa các dải sương.
-- Bão hoà mềm độ dày: `tau2 = 1.3·(1 − e^(−tau2/1.3))`, sương sân che tối đa ~73 %.
-- Ánh sương sân ×0,8, để sương không sáng hơn mặt sân được trăng rọi.
+Fixed in atmos.ts:
+- Yard fog averages noise at 2 quartile points (no more horizontal streaks).
+- Added large ~3 m blobs drifting slowly, so the dark yard and the base of the neighbours' houses show between fog bands.
+- Soft saturation of thickness: `tau2 = 1.3·(1 − e^(−tau2/1.3))`, yard fog covers at most ~73 %.
+- Yard fog light ×0.8, so the fog is no brighter than the moonlit yard surface.
 
-Sửa trong rain.ts:
-- **Gỗ ẩm loang lổ dưới mái** (`damp` tối đa 0,26, nhiễu thưa ~1 × 2,5 m):
-  - Sàn tối đi tối đa ~10 %.
-  - Phản chiếu Fresnel mờ (nhám 0,08) của đèn hiên, quả bí thắp và trăng (bị mái che).
-  - Không đọng vũng nên không có gợn.
-- **Gợn mưa:**
-  - Tỉ lệ ô có giọt 0,45 → 0,75 trên thềm, 0,6 → 0,8 ngoài sân; mỗi vòng sống 0,65 s (cũ 0,5 s).
-  - Vòng bắt sáng ×1,8; hạt bắn ×1,8, thấy được cả khi vòng bị dẹt.
-- **Giọt từ mép mái trái và thanh trên lan can:** bán kính 1,7 → 2,4 mm, tối thiểu 0,55 pt, sáng ×1,5 (giọt loé như thấu kính).
-- **Phản chiếu:**
-  - Cửa sổ nhà mình và kính cửa giảm ~37 % (hết đốm cam phát sáng).
-  - Đèn hiên ×1,4 (trên gỗ ẩm vẫn ra một vệt ấm mờ).
-- **Hiệu năng:**
-  - Ở gỗ chỉ ẩm (không vũng) bỏ qua `ripples()` và 4 phản chiếu cửa sổ nhà bên.
-  - Đo trên WebGL, 1320×2868, máy đang tải: pass mưa 3,6 ms sau so với 3,9 ms trước (trung bình 4 lần, sai số ±0,5 ms), nên không chậm hơn.
-  - Sương thêm 2 lần nhiễu ở 1/3 mật độ: không đáng kể.
+Fixed in rain.ts:
+- **Blotchy damp wood under the roof** (`damp` max 0.26, sparse noise ~1 × 2.5 m):
+  - Floor darkens by up to ~10 %.
+  - Blurry Fresnel reflections (roughness 0.08) of the porch light, the lit pumpkin and the moon (blocked by the roof).
+  - No standing puddles, so no ripples.
+- **Rain ripples:**
+  - Share of cells with a drop 0.45 → 0.75 on the deck, 0.6 → 0.8 in the yard; each ring lives 0.65 s (was 0.5 s).
+  - Rings catch light ×1.8; splash particles ×1.8, visible even when the ring is squashed.
+- **Drips from the left roof edge and the railing's top rail:** radius 1.7 → 2.4 mm, minimum 0.55 pt, brightness ×1.5 (drops glint like lenses).
+- **Reflections:**
+  - Our house's window and door glass reduced ~37 % (no more glowing orange blobs).
+  - Porch light ×1.4 (still gives a faint warm streak on damp wood).
+- **Performance:**
+  - On wood that's only damp (no puddles), skip `ripples()` and the 4 neighbouring-house window reflections.
+  - Measured on WebGL, 1320×2868, loaded machine: rain pass 3.6 ms after vs 3.9 ms before (average of 4 runs, ±0.5 ms error), so not slower.
+  - Fog adds 2 noise lookups at 1/3 density: negligible.
 
-Ảnh:
-- `atmos/sim_polish-2045_truoc-sau.jpg`: sim, hàng trên trước / hàng dưới sau. Thứ tự cột: yaw +0,62 · yaw −0,66 lúc sét loé · −0,66 ngay sau sét · khung nghỉ đã thắp (đang nghiêng máy).
-- `atmos/render_san-yaw-0.66_truoc-sau.jpg`: sân sau lan can: trước | sau, thường | lúc sét.
-- `atmos/render_san-khung-nghi_truoc-sau.jpg`: sàn ở khung nghỉ: chưa thắp trước | sau, đã thắp trước | sau.
+Images:
+- `atmos/sim_polish-2045_before-after.jpg`: sim, top row before / bottom row after. Column order: yaw +0.62 · yaw −0.66 during the lightning flash · −0.66 right after the strike · lit rest frame (phone tilting).
+- `atmos/render_yard-yaw-0.66_before-after.jpg`: yard behind the railing: before | after, normal | during lightning.
+- `atmos/render_floor-rest-frame_before-after.jpg`: floor at the rest frame: not lit before | after, lit before | after.
 
-Ghi chú công cụ:
-- `dump.cjs` của tôi đã thêm uniform mới của LIGHT / FX (`candleFloorUniforms`, `fOff`, `fStretch`, `fGust`, `fTip`, `gust`, `ember`).
-- Child `mask` của candleLight đã được thêm, để render offline khớp bản hiện tại.
+Tooling notes:
+- My `dump.cjs` now includes the new LIGHT / FX uniforms (`candleFloorUniforms`, `fOff`, `fStretch`, `fGust`, `fTip`, `gust`, `ember`).
+- candleLight's `mask` child has been added, so the offline render matches the current build.
 
-## 9. Lá gió intro (`app/src/fx/Gust.tsx`, ATMOS giữ từ 18:45)
+## 9. Intro wind leaves (`app/src/fx/Gust.tsx`, owned by ATMOS since 18:45)
 
-Lỗi: `render/preview/review-1828.png`, khung 2,6 s (khung nghỉ) có một lá tiền cảnh mờ tối, ngoài nét, đè ngang mặt bí như vết bẩn.
-- Gió bắt đầu 1,6 s.
-- Lá tiền cảnh sống tới ~3,5 s, lá trung cảnh tới ~4,2 s, nên vẫn còn trong khung khi camera đã dừng (2,3 s).
-- Lá tiền cảnh đặt theo toạ độ thế giới nên có thể bay qua giữa khung.
+Bug: `render/preview/review-1828.png`, the 2.6 s frame (rest frame) has a dim, dark, out-of-focus foreground leaf lying across the pumpkin's face like a smudge.
+- The gust starts at 1.6 s.
+- Foreground leaves live until ~3.5 s, midground leaves until ~4.2 s, so they're still in frame after the camera has stopped (2.3 s).
+- Foreground leaves are placed in world coordinates, so they can fly across the middle of the frame.
 
-Sửa:
-- **Lá tiền cảnh:**
-  - Bắt đầu trong 0,01–0,175 s, mỗi lá chỉ ~0,5 s trong khung, nên lá cuối ra khỏi khung lúc u = 0,68 (2,28 s), trước khi camera dừng.
-  - Đặt theo hệ camera, độ sâu 0,32–0,62 m.
-  - X quét ngang từ −1,3 đến +1,3 nửa bề ngang (vào và ra hẳn hai mép).
-  - Y trong dải mép trên (lá chẵn) / mép dưới (lá lẻ), 72–94 % nửa chiều cao. Tức là chỉ trong 6–28 % sát mép khung, kể cả lúc camera đang cẩu.
-  - Lá nhỏ hơn (5,5–9 cm, cũ 8,5–13,5 cm), xoay / lật nhanh hơn.
-  - Độ đục thân 0,9 → 0,55, bóng mờ chuyển động 0,4 → 0,22.
-- **Lá trung cảnh:** bắt đầu ≤ 0,12 s, sống 0,55 s, bay 3,6–5,8 m/s (cũ 1,7–3), hết trước u = 0,67.
-- **Lá sàn:** gió tới sớm hơn (0,04–0,22 s), trượt e^(−7τ), nảy 0,22–0,34 s, nằm yên trước ~0,6 s sau cơn gió.
-- Lint và tsc sạch.
+Fix:
+- **Foreground leaves:**
+  - Start within 0.01–0.175 s, each leaf only ~0.5 s in frame, so the last leaf leaves the frame at u = 0.68 (2.28 s), before the camera stops.
+  - Placed in camera space, depth 0.32–0.62 m.
+  - X sweeps across from −1.3 to +1.3 half-widths (fully entering and exiting at both edges).
+  - Y within the top-edge band (even leaves) / bottom-edge band (odd leaves), 72–94 % of the half-height. I.e. only within 6–28 % of the frame edge, even while the camera is craning.
+  - Smaller leaves (5.5–9 cm, was 8.5–13.5 cm), faster spin / flip.
+  - Body opacity 0.9 → 0.55, motion-blur ghost 0.4 → 0.22.
+- **Midground leaves:** start ≤ 0.12 s, live 0.55 s, fly at 3.6–5.8 m/s (was 1.7–3), gone before u = 0.67.
+- **Floor leaves:** the gust arrives earlier (0.04–0.22 s), slide e^(−7τ), bounce 0.22–0.34 s, settle ~0.6 s after the gust.
+- Lint and tsc clean.
 
-Kiểm tra trên sim của tôi:
-- Không quay video được (máy đang có agent khác quay sim, quay là độc quyền cả máy).
-- Thay vào đó build sandbox với TIMESCALE 0,15 rồi chụp liên tiếp.
-- Ảnh `atmos/gust_truoc-sau.jpg`: trước (2,6 s, review-1828) | sau: 4 khung cuối cơn gió (lá ở mép trên trái, mép dưới) | khung nghỉ sạch.
+Checked on my sim:
+- Couldn't record video (another agent was recording a sim, and recording is exclusive to the whole machine).
+- Instead built the sandbox with TIMESCALE 0.15 and took burst screenshots.
+- Image `atmos/gust_before-after.jpg`: before (2.6 s, review-1828) | after: last 4 frames of the gust (leaves at the top-left edge, bottom edge) | clean rest frame.

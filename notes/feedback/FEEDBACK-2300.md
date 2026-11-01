@@ -1,33 +1,33 @@
-# Feedback anh Hoa 23:00, sau khi xem clip v5s: sửa xong rồi quay lại bản cuối
+# Feedback from Hoa 23:00, after watching clip v5s: fix, then re-record the final version
 
-Ảnh nằm trong thư mục này.
+Images are in this folder.
 
-1. **Mặt trăng bị méo** (`moon-warp.png`), giao ATMOS
-   - Khi camera ngước lên hoặc nhìn quanh, trăng thành hình elip nghiêng, do bị kéo giãn khi dựng lại ảnh từ ảnh nền và panorama.
-   - Sửa: trăng phải luôn tròn. Vẽ trăng thành một sprite riêng, ở vô cực, theo hướng thế giới, chiếu đúng phối cảnh.
-   - Xoá trăng khỏi ảnh nền và panorama, hoặc che trăng gốc bằng màu trời. Giữ quầng sáng và mây đi qua trăng.
+1. **The moon is warped** (`moon-warp.png`), assigned to ATMOS
+   - When the camera looks up or around, the moon becomes a tilted ellipse, because it gets stretched when reprojecting from the background image and the panorama.
+   - Fix: the moon must always be round. Draw the moon as its own sprite, at infinity, along a world direction, with correct perspective projection.
+   - Remove the moon from the background image and panorama, or cover the original moon with sky colour. Keep the halo and the clouds passing over the moon.
 
-2. **Vụn bí dính trên mặt quả bí** (`debris-on-face.png`), giao CAT (giữ `Particles.tsx` / `pfx_atlas.ts`)
-   - Những cục giống hòn sỏi nâu lơ lửng hoặc dính trên mặt bí, và hạt bí dính quanh mắt, mũi, miệng.
-   - Sửa: vụn phải rơi khỏi mặt bí ngay (trọng lực) và nằm trên sàn, không lơ lửng trước mặt bí.
-   - Vụn phải là thịt bí màu cam vàng, ẩm, nhỏ, không phải cục đá nâu to. Giảm số lượng.
+2. **Pumpkin debris stuck on the pumpkin face** (`debris-on-face.png`), assigned to CAT (owns `Particles.tsx` / `pfx_atlas.ts`)
+   - Lumps that look like brown pebbles float in front of or stick to the pumpkin face, and seeds stick around the eyes, nose, mouth.
+   - Fix: debris must fall off the pumpkin face immediately (gravity) and lie on the floor, not float in front of the pumpkin.
+   - Debris must be small, moist orange-yellow pumpkin flesh, not big brown stones. Fewer of them.
 
-3. **Thừa chữ trên màn hình** (`extra-title.png`, `extra-buttons.png`), giao agent chính
-   - Bỏ tiêu đề PUMPKIN CARVE kèm dòng phụ "carve · tap · look around · light the match", và hàng nút Undo / Reset / Classic / Spooky / Cat.
-   - Bỏ ở bản quay và chế độ demo. Cho một cờ `EXPO_PUBLIC_CLEAN=1`, hoặc ẩn hẳn.
+3. **Extra text on screen** (`extra-title.png`, `extra-buttons.png`), assigned to the main agent
+   - Remove the PUMPKIN CARVE title with the subtitle "carve · tap · look around · light the match", and the Undo / Reset / Classic / Spooky / Cat button row.
+   - Remove them in the recording and in demo mode. Add an `EXPO_PUBLIC_CLEAN=1` flag, or hide them entirely.
 
-4. **Ánh sáng lỗi dưới các mảnh vụn** (`light-under-debris.png`), giao LIGHT
-   - Giữa các mảng sáng cam của mặt cười trên sàn có các hình mặt cười màu trắng xám nhạt bị lệch. Có thể là vệt sét xuyên lỗ còn sót lại, hoặc lớp ánh sáng cũ chưa tắt.
-   - Sửa: bỏ hẳn bóng ma trắng này. Sàn ngoài vùng sáng cam phải là gỗ bình thường.
-   - Kiểm lúc sét và ngoài lúc sét.
+4. **Light glitch under the debris** (`light-under-debris.png`), assigned to LIGHT
+   - Between the orange smiley-face light patches on the floor there are offset pale grey-white smiley shapes. Possibly leftover lightning-through-the-holes streaks, or an old light layer that wasn't turned off.
+   - Fix: remove this white ghost entirely. The floor outside the orange light must be plain wood.
+   - Check during lightning and outside of it.
 
-5. **Dơi bay ra từ quả bí xấu** (`bats-fire-burst.png`), giao CAT (giữ `Bats.tsx`)
-   - Đang có một đám lửa hoặc khói bùng ra từ miệng bí, mép rách như giấy. Trông xấu, phải bỏ hẳn.
-   - Theo anh Hoa, dơi bay vào **từ bên ngoài** thì hợp lý hơn.
-   - Cách làm: đàn dơi bay tới từ khoảng sân tối hoặc bầu trời phía xa, lượn qua hiên (có đàn lướt sát ống kính), rồi bay lên trời xếp chữ HAPPY HALLOWEEN như bản đã duyệt.
-   - Không phát ra gì từ quả bí cả.
+5. **Bats flying out of the pumpkin look bad** (`bats-fire-burst.png`), assigned to CAT (owns `Bats.tsx`)
+   - There's currently a burst of fire or smoke out of the pumpkin's mouth, with edges ragged like paper. Looks bad, must go entirely.
+   - Hoa thinks it makes more sense for the bats to fly in **from outside**.
+   - How: the swarm flies in from the dark yard or the distant sky, swoops across the porch (with some grazing the lens), then flies up into the sky to spell HAPPY HALLOWEEN as in the approved version.
+   - Nothing comes out of the pumpkin at all.
 
-## Thứ tự
-- Mỗi tab sửa xong thì báo agent chính.
-- Agent chính gộp, build Release, quay bằng rec120, rồi dựng promo máy đứng yên (`v5s.json`) ở 60 fps.
-- Chỉ dọn thư mục tạm khi đã dựng xong.
+## Order
+- Each tab reports to the main agent when its fix is done.
+- The main agent merges, builds Release, records with rec120, then edits the still-phone promo (`v5s.json`) at 60 fps.
+- Only clean up the temp folders once editing is done.

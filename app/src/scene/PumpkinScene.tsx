@@ -71,7 +71,7 @@ import { BLOW_DEMO, blowFlicker, blowLean, useBlowOut } from "../fx/blowOut";
 import { BlackCat } from "../fx/BlackCat";
 import { Particles, type Burst } from "../fx/Particles";
 import { usePumpkinJump } from "../fx/jump";
-import { IslandPill } from "../fx/IslandPill"; // JumpTrail bỏ (FEEDBACK 23:xx: vệt be rời dưới quả bí trông giả)
+import { IslandPill } from "../fx/IslandPill"; // JumpTrail dropped (FEEDBACK 23:xx: the detached beige streak under the pumpkin looked fake)
 import { ImpactDust } from "../fx/ImpactDust";
 import { fireHaptic, type HapticKind } from "../fx/haptics";
 import { boltPoints, currentStrike, flashCurve } from "../fx/storm";
@@ -91,18 +91,18 @@ import {
   introWobble,
 } from "../demo/script";
 
-/** EXPO_PUBLIC_DEMO=1: app tự chạy đúng storyboard để quay clip. */
+/** EXPO_PUBLIC_DEMO=1: the app plays the exact storyboard by itself for clip recording. */
 const DEMO = process.env.EXPO_PUBLIC_DEMO === "1";
-/** Màn sạch cho bản quay (FEEDBACK-2300): không tiêu đề, dòng phụ, hàng nút. Demo luôn sạch; app thường bật bằng EXPO_PUBLIC_CLEAN=1. */
+/** Clean screen for recordings (FEEDBACK-2300): no title, subtitle or button row. Demo is always clean; the regular app enables it with EXPO_PUBLIC_CLEAN=1. */
 const CLEAN = DEMO || process.env.EXPO_PUBLIC_CLEAN === "1";
-// nghiêng máy = mắt đi vòng quanh quả bí (m ở tilt 1) và quay lại nhìn đúng tâm bí
+// tilting the phone = the eye orbits the pumpkin (m at tilt 1) and turns back to look straight at the pumpkin center
 const ORBIT_X = 0.16;
 const ORBIT_Y = 0.08;
-// độ sâu tâm quả bí so với camera gốc (m): quy đổi pt ảnh gốc ↔ m khi bí nhảy
+// pumpkin center depth relative to the original camera (m): converts original image pt ↔ m when the pumpkin jumps
 const D0 = -[0, 1, 2].reduce((a, i) => a + CAM.rot[2][i] * (PUMPKIN.c[i] - CAM.pos[i]), 0);
 const D2R = Math.PI / 180;
-const LIGHT_K = 2; // độ phân giải bản đồ ánh nến (px / pt ảnh gốc)
-/** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */
+const LIGHT_K = 2; // candlelight map resolution (px / original image pt)
+/** Fog (atmos.ts) is drawn in its own canvas at 1/ATMOS_DOWN pixel density then scaled back up: ATMOS_DOWN² times cheaper, fog is soft anyway. */
 const ATMOS_DOWN = 3;
 const clamp = (v: number, a: number, b: number) => {
   "worklet";
@@ -131,7 +131,7 @@ const sceneAssets = {
   depthP: require("../../assets/scene/bg_depth_pano.png"),
 };
 
-// quả bí đứng yên trên ảnh gốc: elip dùng để thử chạm (khắc / nhảy)
+// the pumpkin standing still on the original image: ellipse used for hit testing (carve / jump)
 const onPumpkin = (bx: number, by: number) => {
   "worklet";
   const dx = (bx - PUMPKIN_MID[0]) / (CROP.s * 0.47);
@@ -158,7 +158,7 @@ export function PumpkinScene() {
   const depthP = useGpuImage(sceneAssets.depthP);
 
   const carve = useCarveMask();
-  // bản đồ ánh nến lọt qua lỗ khắc: tính lại (GPU, offscreen) mỗi khi mask khắc đổi
+  // candlelight map leaking through the carved holes: recomputed (GPU, offscreen) whenever the carve mask changes
   const [lightMap, setLightMap] = useState<SkImage | null>(null);
   useEffect(() => {
     if (!depthB) return;
@@ -224,12 +224,12 @@ export function PumpkinScene() {
   const [fitState, setFitState] = useState<Fit>({ k: 1, ox: 0, oy: 0 });
   const [size, setSize] = useState({ w: 0, h: 0 });
 
-  // ── đồng hồ + trạng thái ánh sáng ──
+  // ── clock + lighting state ──
   const time = useSharedValue(0);
   const porch = useSharedValue(1);
   const candle = useSharedValue(0);
   const flash = useSharedValue(0);
-  const storm = useSharedValue(0); // loé sét
+  const storm = useSharedValue(0); // lightning flash
   const boltA = useSharedValue(0);
   const bolt = useSharedValue<number[][]>(boltPoints(0, 0.5, 1));
   const strikeSeed = useSharedValue(0);
@@ -239,33 +239,33 @@ export function PumpkinScene() {
   const batsFired = useSharedValue(false);
   const uiFade = useSharedValue(0);
 
-  // ── camera xem: người dùng kéo nền để nhìn quanh, chụm 2 ngón để zoom; intro zoom từ xa vào ──
+  // ── view camera: the user drags the background to look around, pinches to zoom; the intro zooms in from afar ──
   const yawU = useSharedValue(0);
   const pitchU = useSharedValue(0);
   const zoomU = useSharedValue(1);
   const look0 = useSharedValue({ yaw: 0, pitch: 0, zoom: 1 });
   const basis = useSharedValue<Basis>(viewBasis({ yaw: 0, pitch: 0, zoom: 1 }));
 
-  // ── khắc ──
-  const pts = useSharedValue<Pts>([]); // điểm nét dao trên ảnh gốc (pt)
+  // ── carving ──
+  const pts = useSharedValue<Pts>([]); // knife stroke points on the original image (pt)
   const mode = useSharedValue<"none" | "carve" | "match" | "look">("none");
   const sawLen = useSharedValue(0);
-  const finger = useSharedValue({ x: 0, y: 0, a: 0 }); // ngón tay ảo (màn hình)
+  const finger = useSharedValue({ x: 0, y: 0, a: 0 }); // virtual finger (screen)
   const auto = useSharedValue<Auto[]>([]);
   const bursts = useSharedValue<Burst[]>([]);
-  // vụn thịt bí khi khắc: tắt hẳn (anh Hoa 23:3x — vụn trên sàn trông lơ lửng); Particles chỉ còn tàn lửa sau khi thắp
+  // pumpkin flesh debris while carving: fully off (Hoa 23:3x — debris on the floor looked like it was floating); Particles now only does embers after lighting
   const noDebris = useSharedValue<typeof bursts.value>([]);
   const holeN = useSharedValue(0);
   const autoIdx = useSharedValue(0);
   const tapIdx = useSharedValue(0);
 
-  // ── que diêm (toạ độ màn hình) ──
+  // ── match (screen coordinates) ──
   const mx = useSharedValue(MATCH_REST.x);
   const my = useSharedValue(MATCH_REST.y);
   const burn = useSharedValue(0);
   const matchFade = useSharedValue(0);
 
-  // ── thổi tắt nến (mic hoặc kịch bản demo, fx/blowOut.ts): nến tắt thì que diêm hiện lại trên thềm để chạm thắp lại ──
+  // ── blowing out the candle (mic or demo script, fx/blowOut.ts): once the candle is out the match reappears on the porch, tap to relight ──
   const blow = useBlowOut({
     time,
     candle,
@@ -282,21 +282,21 @@ export function PumpkinScene() {
   });
   const relitDemo = useSharedValue(0);
 
-  // ── nghiêng: gyro (máy thật) hoặc kịch bản (demo) → parallax lỗ khắc + xoay nhẹ camera ──
+  // ── tilt: gyro (real device) or script (demo) → carved hole parallax + slight camera rotation ──
   const gravity = useAnimatedSensor(SensorType.GRAVITY, { interval: 16 });
   const tilt = useSharedValue<[number, number]>([0, 0]);
   const grav0 = useSharedValue<number | null>(null);
 
-  // ── bí nhảy / bay vào Dynamic Island ──
+  // ── pumpkin jump / flight into the Dynamic Island ──
   const anchor = useSharedValue({ x: VIEW.w / 2, y: VIEW.h * 0.78, w: 240 });
   const jump = usePumpkinJump({ time, anchor });
-  // lửa nhìn theo ngón tay (demo: ngón tay ảo; app: chạm thật)
+  // the flame follows the finger (demo: virtual finger; app: real touch)
   const touch = useSharedValue({ x: 0, y: 0, a: 0 });
   const ffFinger = DEMO ? finger : touch;
   const ff = useFlameFollow({ time, basis, finger: ffFinger, candle, jumpOff: jump.off, width: anchor });
 
-  // React Compiler bỏ qua component này (`time` truyền vào hook phía sau → "may be modified later"); giữ useCallback tay như
-  // mọi bản quay trước để không đổi hành vi memo ngay trước bản cuối.
+  // React Compiler skips this component (`time` is passed into a later hook → "may be modified later"); keep manual useCallback as in
+  // every previous recording so memo behavior does not change right before the final cut.
   /* eslint-disable react-hooks/preserve-manual-memoization */
   const commitStroke = useCallback(
     (p: Pts) => {
@@ -326,7 +326,7 @@ export function PumpkinScene() {
     for (let i = 0; i < 7; i++) setTimeout(() => fireHaptic(i % 3 === 0 ? "medium" : "light"), ms(i * 90));
   }, []);
 
-  /** Thắp nến: đèn hiên tắt, tối hẳn 0,3s, nến bùng (overshoot) rồi chập chờn. Gọi trên UI thread. */
+  /** Light the candle: porch light goes off, fully dark for 0.3s, the candle flares (overshoot) then flickers. Called on the UI thread. */
   const lightUp = () => {
     "worklet";
     if (litAt.value >= 0 && blow.outAt.value < 0) return;
@@ -342,7 +342,7 @@ export function PumpkinScene() {
     scheduleOnRN(onLit);
   };
 
-  /** Ngọn lửa trên màn hình (theo camera xem + bí đang nhảy). */
+  /** The flame on screen (following the view camera + the jumping pumpkin). */
   const flameScreen = () => {
     "worklet";
     const [x, y] = worldToScreen(basis.value, FLAME_W);
@@ -350,7 +350,7 @@ export function PumpkinScene() {
     return [x + o.x, y + o.y] as const;
   };
 
-  /** Nến đã bị thổi tắt: chạm que diêm → que tự quẹt, nhấc lên, hạ vào miệng bí và thắp lại. */
+  /** The candle was blown out: tap the match → it strikes itself, lifts up, lowers into the pumpkin mouth and relights. */
   const strikeMatch = () => {
     "worklet";
     if (blow.outAt.value < 0 || mode.value === "match") return;
@@ -368,15 +368,15 @@ export function PumpkinScene() {
     );
   };
 
-  // mốc riêng: callback được đăng ký lại mỗi lần component render, timeSinceFirstFrame sẽ về 0
-  // đồng hồ chỉ chạy khi ảnh cảnh đã tải xong (panorama lớn tải lâu), để intro không bị mất
+  // own start mark: the callback is re-registered on every component render, timeSinceFirstFrame resets to 0
+  // the clock only runs once the scene images have loaded (the big panorama loads slowly), so the intro is not lost
   const t0 = useSharedValue(-1);
   const readyS = useSharedValue(false);
   useEffect(() => readyS.set(ready), [ready, readyS]);
   useFrameCallback(({ timestamp }) => {
     "worklet";
     if (!readyS.value) return;
-    // chờ texture lên GPU và GPU biên dịch shader ở frame đầu (demo: chờ lâu hơn để không mất cú zoom mở đầu)
+    // wait for textures to reach the GPU and for the GPU to compile shaders on the first frame (demo: wait longer so the opening zoom is not lost)
     if (t0.value < 0) t0.set(timestamp + (DEMO ? 1600 : 700));
     const t = Math.max(0, ((timestamp - t0.value) / 1000) * TIMESCALE);
     time.set(t);
@@ -386,7 +386,7 @@ export function PumpkinScene() {
     else if (gravity.isAvailable) {
       const g = gravity.sensor.value;
       if (grav0.value === null && (g.x !== 0 || g.y !== 0)) grav0.set(g.y);
-      // mốc "cầm thẳng" trôi chậm theo tư thế hiện tại (~3s) để đổi tư thế ngồi/nằm không bị kẹt nghiêng
+      // the "held level" reference drifts slowly toward the current pose (~3s) so changing between sitting/lying does not get stuck tilted
       const base = grav0.value ?? g.y;
       grav0.set(base + (g.y - base) * 0.003);
       const tx = clamp((g.x / 9.81) * 2.6, -1, 1);
@@ -395,10 +395,10 @@ export function PumpkinScene() {
       tilt.set([ox + (tx - ox) * 0.15, oy + (ty - oy) * 0.15]);
     }
 
-    // camera xem = khung nghỉ + intro (cẩu máy từ trăng xuống) + người dùng + kịch bản nhìn quanh + nghiêng máy
+    // view camera = rest frame + intro (crane down from the moon) + user + scripted look-around + phone tilt
     const [iy, ip, iz, ioy] = introView(t);
     const [dy0, dp0] = DEMO ? demoLook(t) : [0, 0];
-    // demo: camera ngước lên-trái về vùng trời có trăng khi dơi xếp chữ
+    // demo: camera tilts up-left toward the sky area with the moon while the bats form the text
     const [by, bp] = DEMO && batsAt.value > 0 ? batLook(t - batsAt.value) : [0, 0];
     const dy = dy0 + by, dp = dp0 + bp;
     const [tx, ty] = tilt.value;
@@ -410,7 +410,7 @@ export function PumpkinScene() {
       oy: REST.oy + ioy + ty * ORBIT_Y,
     };
 
-    // intro: đèn hiên chập chờn khi camera lướt qua, haptic lúc sét mở màn và lúc camera dừng
+    // intro: porch light flickers as the camera sweeps past, haptics on the opening lightning and when the camera stops
     if (litAt.value < 0 && t < 2) porch.set(introPorch(t));
     if (introHap.value === 0 && t >= INTRO.flash[0]) {
       introHap.set(1);
@@ -419,9 +419,9 @@ export function PumpkinScene() {
       introHap.set(2);
       scheduleOnRN(fireHaptic, "light" as HapticKind);
     }
-    // giữ khung nhìn trong vùng panorama (lon ±80°, lat −62..58°): biên phụ thuộc mức zoom
+    // keep the view inside the panorama area (lon ±80°, lat −62..58°): bounds depend on the zoom level
     const halfV = Math.atan(VIEW.h / 2 / (F0 * v.zoom)), halfH = Math.atan(VIEW.w / 2 / (F0 * v.zoom));
-    const tiltBase = Math.asin(-CAM.rot[2][2]); // camera gốc hơi nhìn xuống
+    const tiltBase = Math.asin(-CAM.rot[2][2]); // the original camera looks slightly down
     v.pitch = clamp(v.pitch, (PANO.lat[0] + 4) * D2R + halfV - tiltBase, (PANO.lat[1] - 4) * D2R - halfV - tiltBase);
     v.yaw = clamp(v.yaw, (PANO.lon[0] + 6) * D2R + halfH, (PANO.lon[1] - 6) * D2R - halfH);
     const b = viewBasis(v);
@@ -429,10 +429,10 @@ export function PumpkinScene() {
     const aff = worldAffine(b, PUMPKIN_FOOT_W);
     anchor.set({ x: aff.sx, y: aff.sy, w: PUMPKIN_W * aff.k });
 
-    // giông: loé sét nhiều nhịp, tia sét vẽ trên trời
+    // thunderstorm: multi-pulse lightning flash, bolt drawn in the sky
     const st = currentStrike(t, DEMO);
     if (t < INTRO.flash[3] + 0.6) {
-      // sét mở màn (ngoài lịch STRIKES): 2 nhịp, tia sét cạnh trăng
+      // opening lightning (outside the STRIKES schedule): 2 pulses, bolt next to the moon
       if (strikeSeed.value !== -1) {
         strikeSeed.set(-1);
         bolt.set(boltPoints(INTRO.bolt.az, INTRO.bolt.el, 7));
@@ -454,7 +454,7 @@ export function PumpkinScene() {
       boltA.set(0);
     }
 
-    // nét khắc tự động (demo / stencil): ngón tay ảo đi dọc nét ở tốc độ người thật
+    // automatic carve strokes (demo / stencil): the virtual finger traces the stroke at real human speed
     const q = auto.value;
     const i = autoIdx.value;
     if (i < q.length) {
@@ -486,7 +486,7 @@ export function PumpkinScene() {
         }
       }
     } else if (DEMO && t > SCRIPT.look[0].t - 0.3 && t < SCRIPT.look[SCRIPT.look.length - 1].t) {
-      // demo nhìn quanh: ngón tay ảo kéo nền ngược chiều xoay
+      // demo look-around: the virtual finger drags the background opposite to the rotation
       const [ly, lp] = demoLook(t);
       const a = Math.min(1, (t - SCRIPT.look[0].t + 0.3) / 0.3, (SCRIPT.look[SCRIPT.look.length - 1].t - t) / 0.3);
       finger.set({ x: VIEW.w * 0.62 - ly * 160, y: VIEW.h * 0.34 + lp * 160, a });
@@ -494,7 +494,7 @@ export function PumpkinScene() {
       finger.set({ ...finger.value, a: Math.max(0, finger.value.a - 0.08) });
     }
 
-    // demo: chạm cho bí nhảy (ngón tay ảo chạm vào bí)
+    // demo: tap to make the pumpkin jump (virtual finger taps the pumpkin)
     if (DEMO) {
       const taps = SCRIPT.taps;
       const ti = tapIdx.value;
@@ -509,7 +509,7 @@ export function PumpkinScene() {
       }
     }
 
-    // demo: kéo que diêm vào miệng bí
+    // demo: drag the match into the pumpkin mouth
     if (DEMO && litAt.value < 0) {
       const u = (t - SCRIPT.matchAt) / SCRIPT.matchDur;
       if (u > -0.3 && u < 0) finger.set({ x: MATCH_REST.x, y: MATCH_REST.y, a: (u + 0.3) / 0.3 });
@@ -517,7 +517,7 @@ export function PumpkinScene() {
         const e = u >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * u);
         const [fx, fy] = flameScreen();
         const tx3 = fx + 6, ty3 = fy + 16;
-        // cung cong: nhấc lên rồi hạ vào miệng
+        // curved arc: lift up then lower into the mouth
         mx.set(MATCH_REST.x + (tx3 - MATCH_REST.x) * e);
         my.set(MATCH_REST.y + (ty3 - MATCH_REST.y) * e - Math.sin(Math.PI * e) * 70);
         burn.set(Math.min(1, u * 4));
@@ -534,7 +534,7 @@ export function PumpkinScene() {
       if (g) finger.set(g);
     }
     if (DEMO && litAt.value >= 0 && batsAt.value < 0 && t >= SCRIPT.bats) batsAt.set(t);
-    // demo: thổi tắt (BLOW_DEMO) rồi ngón tay ảo chạm que diêm thắp lại
+    // demo: blow out (BLOW_DEMO) then the virtual finger taps the match to relight
     if (DEMO && BLOW_DEMO.relight !== null && blow.outAt.value >= 0) {
       const u = t - BLOW_DEMO.relight;
       if (u > -0.3 && u < 0) finger.set({ x: MATCH_REST.x, y: MATCH_REST.y + 20, a: (u + 0.3) / 0.3 });
@@ -545,7 +545,7 @@ export function PumpkinScene() {
       }
     }
 
-    // dơi: rung haptic khi bắt đầu
+    // bats: haptic buzz when they start
     const ba = batsAt.value;
     if (ba > 0 && t >= ba && !batsFired.value) {
       batsFired.set(true);
@@ -567,7 +567,7 @@ export function PumpkinScene() {
     const f = fit.value;
     return [(x - f.ox) / f.k, (y - f.oy) / f.k] as const;
   };
-  /** Thả tay sau khi nhìn quanh: trôi theo quán tính rồi từ từ quay về khung chính. */
+  /** Release after looking around: coast with inertia then slowly return to the main frame. */
   const settleView = (vx: number, vy: number) => {
     "worklet";
     const f = F0 * zoomU.value;
@@ -641,7 +641,7 @@ export function PumpkinScene() {
       }
       mode.set("none");
     });
-  // chạm vào quả bí: nhảy (chạm dồn → bay vào Dynamic Island)
+  // tap on the pumpkin: jump (rapid taps → fly into the Dynamic Island)
   const tap = Gesture.Tap()
     .maxDuration(300)
     .maxDistance(10)
@@ -668,7 +668,7 @@ export function PumpkinScene() {
     .onEnd(() => {
       zoomU.set(withDelay(2200, withSpring(1, { damping: 20, stiffness: 40 })));
     });
-  // chạm thật (app): ngón tay ở đâu lửa nghiêng về đó, chạy song song pan / tap / pinch
+  // real touch (app): the flame leans toward wherever the finger is, runs alongside pan / tap / pinch
   const touchG = Gesture.Manual()
     .enabled(!DEMO)
     .manualActivation(true)
@@ -737,7 +737,7 @@ export function PumpkinScene() {
     const jerk = Math.sin(t * 2.3) > 0.97 ? -0.12 : 0;
     return candle.value * (0.9 + n + jerk) * blowFlicker(t, blow.gust.value);
   });
-  // biến đổi nhảy (màn hình → ảnh gốc) dùng chung cho các shader
+  // jump transform (screen → original image) shared by the shaders
   const viewU = useDerivedValue(() => {
     const b = basis.value;
     const k = Math.max(anchor.value.w / PUMPKIN_W, 1e-3);
@@ -768,7 +768,7 @@ export function PumpkinScene() {
       jScale: jump.scale.value,
     };
   });
-  // độ sâu cảnh: dùng chung cho nền (dựng lại khi mắt dịch) và mưa (che khuất)
+  // scene depth: shared by the background (reconstructed when the eye shifts) and the rain (occlusion)
   const depthU = useDerivedValue(() => ({
     ...viewU.value,
     dK: depthB ? depthB.width() / VIEW.w : 1,
@@ -787,7 +787,7 @@ export function PumpkinScene() {
     candle: flick.value,
     storm: storm.value,
     jumpH: jump.height.value / Math.max(anchor.value.w / PUMPKIN_W, 1e-3),
-    // drawAsImage có thể render theo mật độ điểm ảnh của máy: lấy tỉ lệ thật từ kích thước ảnh
+    // drawAsImage may render at the device pixel density: take the real ratio from the image size
     lk: lightMap ? lightMap.width() / VIEW.w : LIGHT_K,
     fOff: ff.value.off,
     ...candleFloorUniforms(time.value, PUMPKIN_FOOT),
@@ -859,7 +859,7 @@ export function PumpkinScene() {
 
   const fitTransform = useDerivedValue(() => {
     const f = fit.value;
-    // rung: nến bùng, dơi ùa ra, bí rơi mạnh
+    // haptics: candle flares, bats swarm out, pumpkin lands hard
     const t = time.value;
     const bt = batsAt.value > 0 ? t - batsAt.value : -1;
     let shake = flash.value * 2.2 + (bt > 0 && bt < 1.2 ? (1.2 - bt) * 2.4 : 0);
@@ -872,12 +872,12 @@ export function PumpkinScene() {
     const sx = Math.sin(t * 61) * shake, sy = Math.cos(t * 53) * shake;
     return [{ translateX: f.ox + sx }, { translateY: f.oy + sy }, { scale: f.k }];
   });
-  // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
+  // low-density fog canvas: same transform, divided by ATMOS_DOWN
   const fitTransformLow = useDerivedValue(() => {
     const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
     return [{ translateX: t[0].translateX! / ATMOS_DOWN }, { translateY: t[1].translateY! / ATMOS_DOWN }, { scale: t[2].scale! / ATMOS_DOWN }];
   });
-  // lớp vẽ đè gắn với quả bí (vệt dao, mảnh vỏ, vụn, dơi): affine xấp xỉ ảnh gốc → màn hình
+  // overlay layers attached to the pumpkin (knife trail, rind piece, debris, bats): approximate affine original image → screen
   const pumpkinTransform = useDerivedValue(() => {
     const a = localAffine(basis.value, PUMPKIN_MID[0], PUMPKIN_MID[1]);
     return [
@@ -893,14 +893,14 @@ export function PumpkinScene() {
   const fingerY = useDerivedValue(() => finger.value.y);
   const fingerA = useDerivedValue(() => (DEMO ? finger.value.a * 0.85 : 0));
   const blackout = useDerivedValue(() => {
-    // tối hẳn ~0,3s giữa lúc đèn hiên tắt và nến bùng
+    // fully dark for ~0.3s between the porch light going off and the candle flaring
     const la = litAt.value;
     if (la < 0) return introDark(time.value);
     const u = time.value - la;
     return u < 0.39 ? Math.min(1, u / 0.09) * 0.55 : Math.max(0, 0.55 - (u - 0.39) * 4);
   });
 
-  // tiêu đề loé trắng theo sét mở màn rồi nguội dần thành cam ấm; dòng phụ hiện sau
+  // title flashes white with the opening lightning then cools to warm orange; subtitle appears after
   const titleStyle = useAnimatedStyle(() => {
     const t = time.value;
     const f = INTRO.flash;
@@ -914,7 +914,7 @@ export function PumpkinScene() {
   });
   const subStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, (time.value - 1.2) / 0.6)) * 0.7 }));
   const uiStyle = useAnimatedStyle(() => ({ opacity: 1 - uiFade.value }));
-  // tiêu đề (view RN nằm trên canvas) nhường chỗ cho Dynamic Island đang nở
+  // the title (RN view above the canvas) makes room for the expanding Dynamic Island
   const headerStyle = useAnimatedStyle(() => {
     const p = jump.phase.value;
     const open = p === "toIsland" || p === "island" || (p === "drop" && jump.islandT.value >= 0 && time.value - jump.islandT.value < 3.2);
@@ -984,7 +984,7 @@ export function PumpkinScene() {
                     onDone={() => setPieces((ps) => ps.filter((q) => q.id !== p.id))}
                   />
                 ))}
-                {/* vệt dao: khe cắt hở lộ thịt bí sáng màu, mép dưới đổ bóng tối, mép trên bắt sáng, nước bí ướt */}
+                {/* knife trail: open cut gap showing bright flesh, lower edge casts a dark shadow, upper edge catches light, wet juice */}
                 <Group transform={[{ translateX: 0.7 }, { translateY: 1.1 }]}>
                   <Path path={trail} style="stroke" strokeWidth={3.2} strokeCap="round" strokeJoin="round" color="#3a1404" opacity={0.75}>
                     <BlurMask blur={0.8} style="normal" />
@@ -1010,7 +1010,7 @@ export function PumpkinScene() {
           )}
         </Canvas>
       </GestureDetector>
-      {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
+      {/* fog: 1/ATMOS_DOWN density canvas, scaled back up by the view transform */}
       {ready && size.w > 0 && (
         <View
           pointerEvents="none"
@@ -1030,14 +1030,14 @@ export function PumpkinScene() {
           </Canvas>
         </View>
       )}
-      {/* lớp trên sương: dơi, màn đen, ngón tay ảo, Dynamic Island */}
+      {/* layer above the fog: bats, blackout, virtual finger, Dynamic Island */}
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
         {ready && (
           <Group transform={fitTransform}>
               <Gust layer="fg" time={time} basis={basis} />
               <Bats t0={batsAt} time={time} basis={basis} sky={DEMO} />
               <Fill color="black" opacity={blackout} />
-              {/* ngón tay ảo (chỉ demo) */}
+              {/* virtual finger (demo only) */}
               <Group opacity={fingerA}>
                 <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.22} />
                 <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.55} style="stroke" strokeWidth={1.5} />

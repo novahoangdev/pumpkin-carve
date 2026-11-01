@@ -1,5 +1,5 @@
 {
-  "_doc": "Beat sheet cho promo.py (bản quay v2). Thời gian = giây đồng hồ app (t=0 lúc app mở), trừ: \"start\" = frame đầu clip, \"card\"/\"card+0.9\" = giây sau lúc vào end card, \"end\" = frame cuối. Camera \"at\" = điểm trên màn app (pt, khung 402x874) hoặc {\"world\": [x,y,z]}; \"d\" = khoảng cách camera; \"orbit\" = [ngẩng, xoay] độ. Phone \"rot\" = độ (x,y,z), \"loc\" = dịch.",
+  "_doc": "Beat sheet for promo.py (v2 recording). Times = app clock seconds (t=0 when the app opens), except: \"start\" = first clip frame, \"card\"/\"card+0.9\" = seconds after entering the end card, \"end\" = last frame. Camera \"at\" = point on the app screen (pt, 402x874 frame) or {\"world\": [x,y,z]}; \"d\" = camera distance; \"orbit\" = [pitch, yaw] degrees. Phone \"rot\" = degrees (x,y,z), \"loc\" = offset.",
   "view": [402, 874],
   "app_start": 1.1,
   "app_end": 18.4,

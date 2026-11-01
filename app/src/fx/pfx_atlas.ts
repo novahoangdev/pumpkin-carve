@@ -4,30 +4,30 @@ import { CAM, PUMPKIN, VIEW } from "../scene/layout";
 import { F0, pumpkinHit, viewBasis, type Basis } from "../scene/view";
 
 /**
- * Tiện ích chung cho các hiệu ứng vẽ bằng Atlas (một draw call cho cả trăm sprite).
+ * Shared helpers for Atlas-drawn effects (one draw call for hundreds of sprites).
  *
- * Mỗi frame, một useDerivedValue tính ra mảng số phẳng, mỗi sprite STRIDE số:
+ * Every frame, a useDerivedValue computes a flat number array, STRIDE numbers per sprite:
  *   [scos, ssin, tx, ty,  rx, ry, rw, rh,  r, g, b, a]
- * (RSXform | ô sprite trong sheet (px) | màu nhân vào sprite, a = độ đục).
- * Ba buffer (transform / ô / màu) đọc lại mảng đó và sửa tại chỗ, khỏi cấp phát object Skia mỗi frame.
- * Khi không còn gì sống, derived trả về đúng một mảng rỗng dùng chung → Reanimated thấy giá trị không đổi,
- * không chạy lại buffer, không vẽ lại gì thêm.
+ * (RSXform | sprite cell in the sheet (px) | color multiplied into the sprite, a = opacity).
+ * Three buffers (transform / cell / color) read that array back and modify in place, avoiding Skia object allocation every frame.
+ * When nothing is alive, the derived value returns the exact same shared empty array → Reanimated sees an unchanged value,
+ * does not rerun the buffers, nothing extra is redrawn.
  */
 export const STRIDE = 12;
 /**
- * Sprite "tắt": scale nhỏ nhưng KHẢ NGHỊCH, đặt ngoài màn hình. KHÔNG dùng RSXform (0, 0, 0, 0): Graphite in
- * "[skia] WARNING - Skipping draw with non-invertible/non-finite transform" ra stderr cho TỪNG sprite như vậy mỗi frame
- * (bản Release: ~32 000 dòng/giây, chiếm ~1/3 thời gian của mỗi luồng render → khựng).
+ * "Off" sprite: tiny but INVERTIBLE scale, placed off screen. Do NOT use RSXform (0, 0, 0, 0): Graphite prints
+ * "[skia] WARNING - Skipping draw with non-invertible/non-finite transform" to stderr for EVERY such sprite every frame
+ * (Release build: ~32 000 lines/second, eating ~1/3 of each render thread's time → stutter).
  */
 export const HIDDEN_XF = [1e-3, 0, -1e4, -1e4] as const;
 export const NONE: number[] = [];
 
-/** Lấy mẫu có mipmap: sprite thường được thu nhỏ 2–4 lần trên màn hình. */
+/** Mipmapped sampling: sprites are usually shrunk 2–4× on screen. */
 export const SAMPLING = { filter: FilterMode.Linear, mipmap: MipmapMode.Linear };
 
 /**
- * Đẩy một sprite vào `out`. Điểm neo (ax, ay) trong ô sprite (px) rơi đúng vào (cx, cy) trên canvas,
- * `s` = số pt cho mỗi px sprite, `rot` = góc xoay (rad).
+ * Pushes one sprite into `out`. The anchor (ax, ay) in the sprite cell (px) lands exactly on (cx, cy) on the canvas,
+ * `s` = pt per sprite px, `rot` = rotation angle (rad).
  */
 export const put = (
   out: number[],
@@ -48,7 +48,7 @@ export const put = (
 ) => {
   "worklet";
   if (!(Math.abs(s) >= 1e-3)) {
-    // scale 0 / NaN → ma trận không khả nghịch (xem HIDDEN_XF): đẩy sprite ẩn thay vì sprite suy biến
+    // scale 0 / NaN → non-invertible matrix (see HIDDEN_XF): push a hidden sprite instead of a degenerate one
     out.push(HIDDEN_XF[0], HIDDEN_XF[1], HIDDEN_XF[2], HIDDEN_XF[3], rx, ry, rw, rh, r, g, b, 0);
     return;
   }
@@ -68,13 +68,13 @@ export const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Chia lấy dư luôn dương. */
+/** Always-positive modulo. */
 export const wrap = (v: number, n: number) => {
   "worklet";
   return ((v % n) + n) % n;
 };
 
-/** Ba buffer cố định `max` phần tử cho <Atlas>, nạp từ mảng phẳng `data` (sprite thừa: thu về 0, trong suốt). */
+/** Three fixed buffers of `max` elements for <Atlas>, filled from the flat array `data` (extra sprites: shrunk to 0, transparent). */
 export const useSpriteBuffers = (data: SharedValue<number[]>, max: number) => {
   const transforms = useRSXformBuffer(max, (v, i) => {
     "worklet";
@@ -104,15 +104,15 @@ export const useSpriteBuffers = (data: SharedValue<number[]>, max: number) => {
   return { transforms, sprites, colors };
 };
 
-// ───────────────────────── 3D: hạt sống trong không gian cảnh (m), chiếu qua camera xem ─────────────────────────
+// ───────────────────────── 3D: particles living in scene space (m), projected through the view camera ─────────────────────────
 
-/** Camera gốc (không xoay, không dịch mắt): dùng khi cảnh chưa truyền `basis` → chiếu ra đúng toạ độ ảnh gốc. */
+/** Original camera (no rotation, no eye shift): used when the scene has not passed `basis` → projects to the original image coordinates. */
 export const BASE_BASIS: Basis = viewBasis({ yaw: 0, pitch: 0, zoom: 1 });
 
 const X0 = CAM.rot[0], Y0 = CAM.rot[1], Z0 = CAM.rot[2];
-const CX0 = VIEW.w / 2, CY0 = VIEW.h / 2; // tâm khung thiết kế (layout.json, 17 Pro Max 440×956)
+const CX0 = VIEW.w / 2, CY0 = VIEW.h / 2; // design frame center (layout.json, 17 Pro Max 440×956)
 
-/** Điểm trên quả bí (pt ảnh gốc) → điểm thế giới (m) trên mặt ellipsoid + pháp tuyến ngoài. */
+/** Point on the pumpkin (original image pt) → world point (m) on the ellipsoid surface + outward normal. */
 export const pumpkinWorld = (px: number, py: number) => {
   "worklet";
   const sx = (px - CX0) / F0, sy = -(py - CY0) / F0;
@@ -125,7 +125,7 @@ export const pumpkinWorld = (px: number, py: number) => {
   return [p[0], p[1], p[2], nx, ny, nz];
 };
 
-/** Thế giới → màn hình camera xem (pt thiết kế). out = [x, y, độ sâu m, pt/m ở độ sâu đó]. */
+/** World → view camera screen (design pt). out = [x, y, depth m, pt/m at that depth]. */
 export const proj = (b: Basis, x: number, y: number, z: number, out: number[]) => {
   "worklet";
   const dx = x - b.e[0], dy = y - b.e[1], dz = z - b.e[2];
@@ -138,7 +138,7 @@ export const proj = (b: Basis, x: number, y: number, z: number, out: number[]) =
   out[3] = k;
 };
 
-/** Đoạn mắt → p có bị quả bí che không (giao ellipsoid hơi co lại một chút để hạt sát mặt vỏ không nhấp nháy). */
+/** Is the eye → p segment hidden by the pumpkin (ellipsoid intersection shrunk slightly so particles near the rind do not flicker). */
 export const behindPumpkin = (e: number[], x: number, y: number, z: number) => {
   "worklet";
   const c = PUMPKIN.c, r = PUMPKIN.r;
@@ -153,9 +153,9 @@ export const behindPumpkin = (e: number[], x: number, y: number, z: number) => {
 };
 
 /**
- * Vật rơi tự do có nảy trên mặt thềm (z = rad) rồi trượt có ma sát tới khi dừng — nghiệm giải tích, không cần trạng thái.
- * e: hệ số nảy, fr: mất vận tốc ngang mỗi lần nảy, mu: ma sát trượt.
- * out = [x, y, z, vx, vy, vz, tFirst (thời điểm chạm lần đầu, −1 nếu chưa), tSlide (bắt đầu trượt, −1), rest (0/1), số lần nảy]
+ * Free fall with bounces on the porch plane (z = rad) then sliding with friction until it stops — analytic solution, no state needed.
+ * e: bounce coefficient, fr: horizontal velocity lost per bounce, mu: sliding friction.
+ * out = [x, y, z, vx, vy, vz, tFirst (first contact time, −1 if none yet), tSlide (slide start, −1), rest (0/1), bounce count]
  */
 export const fall = (
   t: number,
@@ -186,7 +186,7 @@ export const fall = (
     vx *= 1 - fr; vy *= 1 - fr;
     if (vz < 0.14) break;
   }
-  // trượt trên thềm, chậm dần đều tới khi dừng
+  // sliding on the porch, uniformly decelerating until it stops
   const sp = Math.hypot(vx, vy);
   const a = mu * G;
   const ts = sp / Math.max(a, 1e-4);
@@ -198,7 +198,7 @@ export const fall = (
   out[6] = tFirst; out[7] = t - tt; out[8] = tt >= ts ? 1 : 0; out[9] = n;
 };
 
-/** Xoay vector v quanh trục đơn vị (ax, ay, az) góc a (Rodrigues), ghi vào out[o..o+2]. */
+/** Rotate vector v around the unit axis (ax, ay, az) by angle a (Rodrigues), written to out[o..o+2]. */
 export const rotv = (vx: number, vy: number, vz: number, ax: number, ay: number, az: number, a: number, out: number[], o: number) => {
   "worklet";
   const c = Math.cos(a), s = Math.sin(a), kd = (ax * vx + ay * vy + az * vz) * (1 - c);
@@ -207,7 +207,7 @@ export const rotv = (vx: number, vy: number, vz: number, ax: number, ay: number,
   out[o + 2] = vz * c + (ax * vy - ay * vx) * s + az * kd;
 };
 
-/** Đèn hiên (m): treo trên khung cửa phía sau quả bí (ảnh gốc ~ (192, 166) pt), trên tường y ≈ 1.5 m. */
+/** Porch light (m): hangs on the door frame behind the pumpkin (original image ~ (192, 166) pt), on the wall at y ≈ 1.5 m. */
 export const LANTERN_W = (() => {
   const sx = (191.9 - CX0) / F0, sy = -(165.76 - CY0) / F0;
   const d = [X0[0] * sx + Y0[0] * sy - Z0[0], X0[1] * sx + Y0[1] * sy - Z0[1], X0[2] * sx + Y0[2] * sy - Z0[2]];
@@ -215,7 +215,7 @@ export const LANTERN_W = (() => {
   return [CAM.pos[0] + d[0] * t, CAM.pos[1] + d[1] * t, CAM.pos[2] + d[2] * t];
 })();
 
-/** Điểm ảnh gốc (pt) → điểm trên mặt thềm z = h (m) theo tia từ camera gốc. */
+/** Original image point (pt) → point on the porch plane z = h (m) along the ray from the original camera. */
 export const baseToFloor = (px: number, py: number, h = 0) => {
   const sx = (px - CX0) / F0, sy = -(py - CY0) / F0;
   const d = [X0[0] * sx + Y0[0] * sy - Z0[0], X0[1] * sx + Y0[1] * sy - Z0[1], X0[2] * sx + Y0[2] * sy - Z0[2]];
@@ -223,7 +223,7 @@ export const baseToFloor = (px: number, py: number, h = 0) => {
   return [CAM.pos[0] + d[0] * t, CAM.pos[1] + d[1] * t, h];
 };
 
-/** Điểm màn hình camera xem (pt) → điểm trên mặt quả bí (m) theo tia từ mắt (trượt ngoài thì lấy điểm gần nhất). */
+/** View camera screen point (pt) → point on the pumpkin surface (m) along the ray from the eye (on a miss, take the nearest point). */
 export const screenToPumpkinWorld = (b: Basis, x: number, y: number) => {
   "worklet";
   const sx = (x - CX0) / b.f, sy = -(y - CY0) / b.f;

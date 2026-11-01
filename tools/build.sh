@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Toàn bộ pipeline Blender → app/assets/scene: dựng cảnh → render các lớp 2.5D + data + layout.json
-# (kèm nền toàn cảnh *_pano.jpg và bóng quả bí shadow_*.png), rồi kiểm tra pano → render/v3/.
-#   tools/build.sh            bản final (100 %, 128 sample)
-#   PREVIEW=1 tools/build.sh  bản xem nhanh (50 %, 24 sample, ~1 phút)
-#   tools/build.sh --only bg_lit,skin_lit   chỉ render lại vài pass (hậu kỳ data/layout vẫn chạy)
+# Full Blender → app/assets/scene pipeline: build scene → render 2.5D layers + data + layout.json
+# (plus *_pano.jpg panorama backgrounds and shadow_*.png pumpkin shadows), then check pano → render/v3/.
+#   tools/build.sh            final (100 %, 128 samples)
+#   PREVIEW=1 tools/build.sh  quick preview (50 %, 24 samples, ~1 min)
+#   tools/build.sh --only bg_lit,skin_lit   re-render only some passes (data/layout post-processing still runs)
 set -eo pipefail
 cd "$(dirname "$0")/.."
 BLENDER=${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}

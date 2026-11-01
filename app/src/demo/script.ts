@@ -2,16 +2,16 @@ import { CENTER, FLAME, VIEW } from "../scene/layout";
 import type { Pts } from "../carve/stroke";
 
 /**
- * Stencil: các nét khắc dựng sẵn, toạ độ tương đối tâm quả bí (pt, thiết kế cho khung 402 pt; nhân K theo khung thật).
- * Mỗi nét là một đường viền khép kín mà "ngón tay" đi theo, dùng cho chế độ demo và nút stencil.
+ * Stencil: prebuilt carve strokes, coordinates relative to the pumpkin center (pt, designed for a 402 pt frame; scaled by K for the real frame).
+ * Each stroke is a closed outline the "finger" follows, used by demo mode and the stencil button.
  */
-/** Tỉ lệ khung thật so với khung thiết kế stencil (402 pt, 17 Pro): 17 Pro Max = 440/402. */
+/** Ratio of the real frame to the stencil design frame (402 pt, 17 Pro): 17 Pro Max = 440/402. */
 export const K = VIEW.w / 402;
 type Shape = number[][];
 
 const mirror = (s: Shape): Shape => s.map(([x, y]) => [-x, y]).reverse();
 
-// đường viền miệng cười: mép trên cong, có răng nhô xuống; mép dưới cong sâu, có một răng nhô lên
+// smile outline: curved top edge with teeth pointing down; deeply curved bottom edge with one tooth pointing up
 const grin = (w: number, top: number, bot: number, teeth: number[], botTooth = true): Shape => {
   const pts: Shape = [];
   const N = 22;
@@ -48,7 +48,7 @@ export const STENCILS: Record<string, Shape[]> = {
   ],
 };
 
-/** Một đường viền → chuỗi điểm dày đặc (bước ~4pt), quay về đúng điểm đầu. */
+/** One outline → dense point sequence (~4pt step), returning exactly to the first point. */
 export const densify = (shape: Shape, step = 4): Pts => {
   const out: Pts = [];
   const pts = [...shape, shape[0]];
@@ -62,12 +62,12 @@ export const densify = (shape: Shape, step = 4): Pts => {
   return out;
 };
 
-// EXPO_PUBLIC_STENCIL=spooky|cat: quay demo với stencil khác (mặc định classic)
+// EXPO_PUBLIC_STENCIL=spooky|cat: record the demo with a different stencil (default classic)
 const DEMO_FACE = STENCILS[process.env.EXPO_PUBLIC_STENCIL ?? "classic"] ?? STENCILS.classic;
 
 /**
- * Kịch bản demo (giây tính từ lúc app mở): zoom từ xa vào quả bí → khắc mắt, mũi, miệng → nhìn quanh hiên →
- * chạm cho bí nhảy, chạm dồn để bí bay vào Dynamic Island rồi rơi lại → kéo que diêm → nghiêng máy → dơi.
+ * Demo script (seconds since app launch): zoom in from afar to the pumpkin → carve eyes, nose, mouth → look around the porch →
+ * tap to make the pumpkin jump, rapid taps send it into the Dynamic Island and it falls back → drag the match → tilt the phone → bats.
  */
 export const DEMO = {
   strokes: [
@@ -76,7 +76,7 @@ export const DEMO = {
     { at: 5.2, pts: densify(DEMO_FACE[2]), speed: K * 110 },
     { at: 5.9, pts: densify(DEMO_FACE[3]), speed: K * 260 },
   ],
-  // nhìn quanh: ngón tay kéo nền (yaw dương = nhìn sang phải)
+  // look around: finger drags the background (positive yaw = look right)
   look: [
     { t: 7.5, yaw: 0, pitch: 0 },
     { t: 8.4, yaw: 0.62, pitch: 0.16 },
@@ -85,35 +85,35 @@ export const DEMO = {
     { t: 10.4, yaw: -0.66, pitch: 0.3 },
     { t: 11.1, yaw: 0, pitch: 0 },
   ],
-  // 2 cú nhảy đơn, rồi chạm dồn (cú thứ 5 đưa bí vào Dynamic Island, bí tiếp đất lại ≈ 16.6, đứng yên ≈ 18.4)
+  // 2 single jumps, then rapid taps (the 5th sends the pumpkin into the Dynamic Island, it lands again ≈ 16.6, at rest ≈ 18.4)
   taps: [11.4, 12.05, 12.7, 13.15, 13.35, 13.55, 13.75],
-  matchAt: 18.6, // bắt đầu kéo que diêm
+  matchAt: 18.6, // start dragging the match
   matchDur: 1.1,
   bats: 24.9,
   matchTarget: { x: FLAME.x + 6, y: FLAME.y + 16 },
 };
 
 /**
- * Khung nghỉ (sau intro): mắt hạ ~8 cm cho góc thấp ngang tầm bí → bí to ~55 % bề ngang, giữa khung, ở ~58 % chiều cao;
- * trăng và đèn hiên vẫn ở nửa trên, bớt sàn trống phía trước.
+ * Rest frame (after the intro): eye lowered ~8 cm for a low angle at pumpkin level → pumpkin ~55 % of the width, centered, at ~58 % of the height;
+ * moon and porch light stay in the upper half, less empty floor in front.
  */
 export const REST = { yaw: -0.01, pitch: 0, zoom: 0.95, oy: -0.08 };
 
 /**
- * Intro 0–3 s (cả app thật lẫn demo; synth_audio.py đọc các mốc này):
- *   0–0.45 tối gần đen, ngước nhìn trăng sau mây · 0.45 sét mở màn 2 nhịp (sáng 70 ms, tối 110 ms, sáng 50 ms), chữ tiêu đề
- *   loé rồi nguội cam · 0.6–2.3 cẩu máy từ trăng xuống (pitch về khung nghỉ, yaw quay về bí, zoom 1.4 → 0.85 → 1.12, mắt hạ dần)
- *   · ≈1.4 đèn hiên chập chờn 2 lần · ≈1.6 gió cuốn lá · 2.3–2.9 dừng bằng spring hơi quá đà, bí khẽ lắc.
+ * Intro 0–3 s (both the real app and the demo; synth_audio.py reads these marks):
+ *   0–0.45 near black, looking up at the moon behind clouds · 0.45 opening lightning, 2 pulses (70 ms bright, 110 ms dark, 50 ms bright), title text
+ *   flashes then cools to orange · 0.6–2.3 crane down from the moon (pitch to the rest frame, yaw back to the pumpkin, zoom 1.4 → 0.85 → 1.12, eye lowering)
+ *   · ≈1.4 porch light flickers twice · ≈1.6 wind blows leaves · 2.3–2.9 stops with a slightly overshooting spring, pumpkin wobbles.
  */
 export const INTRO = {
-  start: { yaw: -0.29, pitch: 0.44, zoom: 1.32, oy: 0.12 }, // lệch so với REST (zoom: nhân)
-  flash: [0.45, 0.52, 0.63, 0.68], // sáng [0.45, 0.52), tối, sáng [0.63, 0.68)
+  start: { yaw: -0.29, pitch: 0.44, zoom: 1.32, oy: 0.12 }, // offset from REST (zoom: multiplier)
+  flash: [0.45, 0.52, 0.63, 0.68], // bright [0.45, 0.52), dark, bright [0.63, 0.68)
   crane: [0.6, 2.3],
   zoomMid: { t: 1.45, zoom: 0.85 },
   zoomEnd: 1.12,
-  flicker: [[1.38, 1.43], [1.5, 1.56]], // đèn hiên tắt chớp
+  flicker: [[1.38, 1.43], [1.5, 1.56]], // porch light blinks off
   gust: 1.6,
-  settle: 2.3, // spring về khung nghỉ, bí lắc
+  settle: 2.3, // spring to the rest frame, pumpkin wobbles
   bolt: { az: -0.47, el: 0.84 },
 };
 
@@ -123,12 +123,12 @@ const smooth3 = (u: number) => {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 };
 
-/** Độ lệch camera so với REST trong intro: [yaw, pitch, zoom nhân, oy]. */
+/** Camera offset from REST during the intro: [yaw, pitch, zoom multiplier, oy]. */
 export const introView = (t: number): [number, number, number, number] => {
   "worklet";
   const I = INTRO;
   const p = smooth3((t - I.crane[0]) / (I.crane[1] - I.crane[0]));
-  // spring sau khi cẩu xong: vượt qua khung nghỉ một chút rồi đứng yên
+  // spring after the crane move: overshoots the rest frame a little then settles
   const s = t - I.settle;
   const over = s > 0 ? Math.exp(-s * 6) * Math.sin(s * 12) : 0;
   const k = 1 - p - 0.07 * over;
@@ -140,7 +140,7 @@ export const introView = (t: number): [number, number, number, number] => {
   return [I.start.yaw * k, I.start.pitch * k, z, I.start.oy * k];
 };
 
-/** Độ loé sét mở màn (0..1). */
+/** Opening lightning flash (0..1). */
 export const introStorm = (t: number) => {
   "worklet";
   const f = INTRO.flash;
@@ -151,18 +151,18 @@ export const introStorm = (t: number) => {
   return 0.18 * Math.exp(-(t - f[3]) / 0.25);
 };
 
-/** Màn tối phủ trong intro (0..1). */
+/** Dark overlay during the intro (0..1). */
 export const introDark = (t: number) => {
   "worklet";
   const f = INTRO.flash;
-  if (t < f[0]) return 0.5; // trước cú chớp: trăng mờ sau mây (khung đầu clip = ảnh chờ trên X, không được đen)
+  if (t < f[0]) return 0.5; // before the flash: dim moon behind clouds (first clip frame = the thumbnail on X, must not be black)
   if (t < f[1]) return 0;
   if (t < f[2]) return 0.55;
   if (t < f[3]) return 0;
   return 0.4 * (1 - smooth3((t - f[3]) / 0.7));
 };
 
-/** Đèn hiên chập chờn lúc camera lướt qua (1 = sáng bình thường). */
+/** Porch light flickering as the camera sweeps past (1 = normal brightness). */
 export const introPorch = (t: number) => {
   "worklet";
   const [a, b] = INTRO.flicker;
@@ -172,7 +172,7 @@ export const introPorch = (t: number) => {
   return 1;
 };
 
-/** Bí khẽ lắc như vừa bị gió đẩy khi camera dừng: [xoay rad, nén]. */
+/** Pumpkin wobbles as if pushed by the wind when the camera stops: [rotation rad, squash]. */
 export const introWobble = (t: number): [number, number] => {
   "worklet";
   const s = t - INTRO.settle - 0.05;
@@ -181,7 +181,7 @@ export const introWobble = (t: number): [number, number] => {
   return [0.03 * e * Math.sin(s * 15), 0.025 * e * Math.sin(s * 15 + 0.6)];
 };
 
-/** yaw/pitch nhìn quanh theo kịch bản (nội suy mượt giữa các mốc). */
+/** Look-around yaw/pitch per the script (smoothly interpolated between marks). */
 export const demoLook = (t: number): [number, number] => {
   "worklet";
   const k = DEMO.look;
@@ -197,7 +197,7 @@ export const demoLook = (t: number): [number, number] => {
   return [0, 0];
 };
 
-/** Đường nghiêng giả lập (simulator không có gyro): lắc nhẹ lúc đầu, sau khi thắp lắc trái rồi phải. */
+/** Simulated tilt path (the simulator has no gyro): gentle shake at first, after lighting it tilts left then right. */
 export const demoTilt = (t: number, litAt: number): [number, number] => {
   "worklet";
   const idle = [Math.sin(t * 0.9) * 0.18, Math.sin(t * 0.6 + 1) * 0.08] as [number, number];

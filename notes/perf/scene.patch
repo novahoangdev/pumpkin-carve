@@ -19,8 +19,8 @@
 @@ -77,6 +77,8 @@
  const D0 = -[0, 1, 2].reduce((a, i) => a + CAM.rot[2][i] * (PUMPKIN.c[i] - CAM.pos[i]), 0);
  const D2R = Math.PI / 180;
- const LIGHT_K = 1; // độ phân giải bản đồ ánh nến (px / pt ảnh gốc)
-+/** Sương (atmos.ts) vẽ ở canvas riêng, mật độ điểm ảnh 1/ATMOS_DOWN rồi phóng lại: rẻ hơn ATMOS_DOWN² lần, sương vốn mềm. */
+ const LIGHT_K = 1; // candle-light map resolution (px / plate pt)
++/** Fog (atmos.ts) draws on its own canvas at 1/ATMOS_DOWN pixel density, then scales back up: ATMOS_DOWN² times cheaper, and fog is soft anyway. */
 +const ATMOS_DOWN = 3;
  const clamp = (v: number, a: number, b: number) => {
    "worklet";
@@ -63,7 +63,7 @@
 +  const depthP = useGpuImage(sceneAssets.depthP);
  
    const carve = useCarveMask();
-   // bản đồ ánh nến lọt qua lỗ khắc: tính lại (GPU, offscreen) mỗi khi mask khắc đổi
+   // map of candle light leaking through the carved holes: recomputed (GPU, offscreen) whenever the carve mask changes
 @@ -167,7 +169,7 @@
          </Shader>
        </Fill>,
@@ -79,18 +79,18 @@
    const [fitState, setFitState] = useState<Fit>({ k: 1, ox: 0, oy: 0 });
 +  const [size, setSize] = useState({ w: 0, h: 0 });
  
-   // ── đồng hồ + trạng thái ánh sáng ──
+   // ── clock + light state ──
    const time = useSharedValue(0);
 @@ -706,6 +709,11 @@
      const sx = Math.sin(t * 61) * shake, sy = Math.cos(t * 53) * shake;
      return [{ translateX: f.ox + sx }, { translateY: f.oy + sy }, { scale: f.k }];
    });
-+  // canvas sương mật độ thấp: cùng transform, chia cho ATMOS_DOWN
++  // low-density fog canvas: same transform, divided by ATMOS_DOWN
 +  const fitTransformLow = useDerivedValue(() => {
 +    const t = fitTransform.value as { translateX?: number; translateY?: number; scale?: number }[];
 +    return [{ translateX: t[0].translateX! / ATMOS_DOWN }, { translateY: t[1].translateY! / ATMOS_DOWN }, { scale: t[2].scale! / ATMOS_DOWN }];
 +  });
-   // lớp vẽ đè gắn với quả bí (vệt dao, mảnh vỏ, vụn, dơi): affine xấp xỉ ảnh gốc → màn hình
+   // overlay layer attached to the pumpkin (knife strokes, rind chips, debris, bats): affine approximation plate → screen
    const pumpkinTransform = useDerivedValue(() => {
      const a = localAffine(basis.value, PUMPKIN_MID[0], PUMPKIN_MID[1]);
 @@ -741,6 +749,7 @@
@@ -109,7 +109,7 @@
 +          )}
 +        </Canvas>
 +      </GestureDetector>
-+      {/* sương: canvas 1/ATMOS_DOWN mật độ, phóng lại bằng transform của view */}
++      {/* fog: canvas at 1/ATMOS_DOWN density, scaled back up by the view's transform */}
 +      {ready && size.w > 0 && (
 +        <View
 +          pointerEvents="none"
@@ -127,13 +127,13 @@
 +          </Canvas>
 +        </View>
 +      )}
-+      {/* lớp trên sương: dơi, màn đen, ngón tay ảo, Dynamic Island */}
++      {/* layer above fog: bats, black screen, virtual finger, Dynamic Island */}
 +      <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
 +        {ready && (
 +          <Group transform={fitTransform}>
                <Bats t0={batsAt} time={time} basis={basis} />
                <Fill color="black" opacity={blackout} />
-               {/* ngón tay ảo (chỉ demo) */}
+               {/* virtual finger (demo only) */}
 @@ -822,11 +851,10 @@
                  <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.22} />
                  <Circle cx={fingerX} cy={fingerY} r={17} color="#ffffff" opacity={0.55} style="stroke" strokeWidth={1.5} />

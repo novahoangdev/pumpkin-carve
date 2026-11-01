@@ -1,32 +1,32 @@
-# Tiếng động + nhạc nền cho clip demo (đèn bí ngô), tổng hợp hoàn toàn bằng numpy (không dùng tài nguyên có bản quyền).
-# Mẫu số 0 của file wav = đồng hồ app t = 0 (useFrameCallback trong PumpkinScene.tsx). Mọi mốc đọc từ code app:
-# app/src/demo/script.ts (DEMO), fx/Bats.tsx, fx/Particles.tsx, fx/jump.ts, scene/view.ts — port + mô phỏng lại ở đây.
-# Giọng: "ma quái mà ấm cúng" — đêm hiên nhà, dao cưa bí, que diêm, nến bùng, đàn dơi ùa ra; không kinh dị.
+# Sound effects + background music for the demo clip (jack-o'-lantern), synthesised entirely with numpy (no copyrighted assets).
+# Sample 0 of the wav file = app clock t = 0 (useFrameCallback in PumpkinScene.tsx). All timings are read from the app code:
+# app/src/demo/script.ts (DEMO), fx/Bats.tsx, fx/Particles.tsx, fx/jump.ts, scene/view.ts — ported + re-simulated here.
+# Tone: "spooky but cosy" — night on the porch, a knife sawing pumpkin, a match, a candle flaring, a swarm of bats pouring out; not horror.
 #
-#   nền cả clip: mưa giông (rì rào + giọt + mái hiên + giọt nặng từ mép mái), gió rất nhẹ, cú kêu xa một lần, tiếng ù
-#       khẽ của đèn hiên (tắt cùng công tắc); sấm theo STRIKES trong fx/storm.ts, trễ dist/343 s sau tia chớp
-#   (v3) intro: camera zoom từ xa vào quả bí → whoosh/riser điện ảnh, đáp nhẹ đúng lúc dừng
-#   khắc: mỗi nét có tiếng dao cắm vào, hạt "cưa" theo đúng nhịp haptic (mỗi 18 pt ngón tay đi trên màn hình), nét xong
-#       thì mảnh vỏ "bụp" lún vào trong, rơi "thịch" trong lòng bí, vụn + hạt bí văng ra lộp độp trên sàn gỗ (tính đúng
-#       thời điểm chạm sàn theo vật lý trong fx/Particles.tsx)
-#   (v3) nhìn quanh: gió lia theo tốc độ xoay camera, pan theo hướng yaw; cú kêu lúc ngước nhìn trăng
-#   (v3) chạm bí: nhún "boing" + gõ rỗng lúc bật, "thịch" ván hiên + lá khô lạo xạo lúc đáp; combo bay vào Dynamic
-#       Island: vút lên (cao độ trượt lên), "bloop" bị hút, lấp lánh khi pill nở, rung, "phụt" nhả ra, huýt rơi, THỊCH
-#       nặng + nảy — mô phỏng đúng máy trạng thái trong fx/jump.ts
-#   que diêm: quẹt + bùng lưu huỳnh + xèo xèo khi cháy, lia theo cung (pan theo toạ độ x)
-#   tắt đèn: công tắc "tách", 0.39 s gần như im lặng, nến bùng "phừng" + trầm nở ra, rồi lửa nến lách tách tới hết
-#   nghiêng máy: không khí thở, một âm gió/khí mỏng dâng lên
-#   dơi: port quỹ đạo 3D của fx/Bats.tsx (mét, cùng hash): mỗi con là tiếng vỗ cánh da 9–12 Hz, to/nhỏ theo khoảng
-#       cách tới camera, pan theo góc phương vị; con bay sượt ống kính có gió lướt + lệch cao độ kiểu Doppler; vài tiếng
-#       chít chít nhỏ, rồi tan
-#   nhạc: hộp nhạc/celesta Rê thứ 96 BPM, nhỏ lúc khắc, im khi tắt đèn, nở ra (pad ấm) đúng nhịp nến bùng, kết Rê trưởng
+#   whole-clip bed: thunderstorm rain (hiss + drops + porch roof + heavy drips from the roof edge), very light wind, one distant owl hoot, a faint
+#       porch-light hum (off with the switch); thunder per STRIKES in fx/storm.ts, delayed dist/343 s after the lightning
+#   (v3) intro: camera zooms in from afar to the pumpkin → cinematic whoosh/riser, soft landing exactly as it stops
+#   carving: each stroke has a knife stab, "sawing" grains on the exact haptic rhythm (every 18 pt the finger travels on screen), when the stroke ends
+#       the skin piece "pops" inwards, lands with a "thud" inside the pumpkin, bits + seeds scatter pattering on the wooden floor (exact
+#       floor-hit times from the physics in fx/Particles.tsx)
+#   (v3) look around: wind sweeps with camera rotation speed, panned by yaw; owl hoots when looking up at the moon
+#   (v3) pumpkin tap: "boing" squash + hollow knock on take-off, porch-board "thud" + rustling dry leaves on landing; combo flight into the Dynamic
+#       Island: whoosh up (rising pitch), sucked-in "bloop", sparkle as the pill expands, wobble, "pfft" release, falling whistle, heavy
+#       THUD + bounce — follows the state machine in fx/jump.ts exactly
+#   match: strike + sulphur flare + sizzle while burning, swept along an arc (panned by x coordinate)
+#   lights out: switch "click", 0.39 s of near silence, candle flares "whoomp" + low end blooms, then candle crackle to the end
+#   phone tilt: breathing air, a thin wind/air tone rising
+#   bats: port of the 3D paths in fx/Bats.tsx (metres, same hash): each bat is a 9–12 Hz leathery wingbeat, louder/softer by distance
+#       to the camera, panned by azimuth; bats skimming the lens get a wind rush + Doppler-like pitch shift; a few
+#       tiny squeaks, then dispersal
+#   music: music box/celesta in D minor 96 BPM, quiet during carving, silent at lights out, blooms (warm pad) right on the candle flare, ends in D major
 #
-# Chạy (từ thư mục pumpkin-carve):
+# Run (from the pumpkin-carve folder):
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python blender/scripts/synth_audio.py [-- --out PATH]
-# File ra: --out PATH, hoặc biến môi trường SYNTH_OUT; mặc định render/audio/mix_<phiên bản>.wav, riêng v2 là mix.wav.
-# Phiên bản: SYNTH_VERSION=v2|v3|..., mặc định tự nhận (script.ts có DEMO.taps → v3). Lưu ý: mốc luôn đọc từ code
-# hiện tại, nên SYNTH_VERSION chỉ đổi tên file, không dựng lại được timeline cũ.
-# SYNTH_DEBUG=1: in mức RMS từng stem theo cửa sổ 0.5 s.
+# Output: --out PATH, or the SYNTH_OUT env var; default render/audio/mix_<version>.wav, except v2 which is mix.wav.
+# Version: SYNTH_VERSION=v2|v3|..., auto-detected by default (script.ts has DEMO.taps → v3). Note: timings are always read from the
+# current code, so SYNTH_VERSION only renames the file, it can't rebuild an old timeline.
+# SYNTH_DEBUG=1: print per-stem RMS levels in 0.5 s windows.
 import json, math, os, re, sys, wave
 import numpy as np
 
@@ -48,7 +48,7 @@ def num(key, default):
     return float(m.group(1)) if m else default
 
 
-# ───────────────────────── kịch bản demo (port từ app/src/demo/script.ts) ─────────────────────────
+# ───────────────────────── demo script (ported from app/src/demo/script.ts) ─────────────────────────
 def mirror(s):
     return [[-x, y] for x, y in s][::-1]
 
@@ -69,12 +69,12 @@ def grin(w, top, bot, teeth, bot_tooth=True):
     return pts
 
 
-# K: stencil thiết kế cho khung 402 pt, nhân theo bề ngang khung thật (script.ts: K = VIEW.w / 402; bản cũ không có K)
+# K: stencils designed for a 402 pt frame, scaled by the real frame width (script.ts: K = VIEW.w / 402; old versions have no K)
 K = VIEW_W / 402 if re.search(r"export const K\s*=\s*VIEW\.w\s*/\s*402", SCRIPT_TS) else 1.0
 
 
 def densify(shape, step=4):
-    """giống densify() trong script.ts: bước ~4 pt, khép kín về điểm đầu (Math.round của JS = làm tròn .5 lên)"""
+    """same as densify() in script.ts: ~4 pt steps, closed back to the first point (JS Math.round = round .5 up)"""
     out, pts = [], shape + [shape[0]]
     for (ax, ay), (bx, by) in zip(pts, pts[1:]):
         n = max(1, int(math.floor(math.hypot(bx - ax, by - ay) / step + 0.5)))
@@ -100,7 +100,7 @@ STENCILS = {
         [[-36, 22], [-18, 30], [0, 22], [18, 30], [36, 22], [18, 40], [0, 32], [-18, 40]],
     ],
 }
-# DEMO_FACE = STENCILS[EXPO_PUBLIC_STENCIL ?? "classic"] (v3) hoặc STENCILS.classic[i] trực tiếp (v2)
+# DEMO_FACE = STENCILS[EXPO_PUBLIC_STENCIL ?? "classic"] (v3) or STENCILS.classic[i] directly (v2)
 FACE = STENCILS.get(os.environ.get("EXPO_PUBLIC_STENCIL", "classic"), STENCILS["classic"])
 STROKES = [
     {"at": float(a), "pts": densify(STENCILS[k][int(i)] if k else FACE[int(i)]), "speed": float(s) * (K if kk else 1.0)}
@@ -108,7 +108,7 @@ STROKES = [
         r"at:\s*([\d.]+),\s*pts:\s*densify\((?:STENCILS\.(\w+)|DEMO_FACE)\[(\d+)\]\),\s*speed:\s*(K\s*\*\s*)?([\d.]+)",
         SCRIPT_TS)
 ]
-assert STROKES, "không đọc được DEMO.strokes trong script.ts"
+assert STROKES, "could not read DEMO.strokes from script.ts"
 MATCH_AT = num("matchAt", 8.4)
 MATCH_DUR = num("matchDur", 1.1)
 BATS_AT_SCRIPT = num("bats", 14.6)
@@ -127,14 +127,14 @@ OUT = (_argv[_argv.index("--out") + 1] if "--out" in _argv else None) or os.envi
 OUT = os.path.abspath(OUT)
 
 SR = 48000
-DUR = float(os.environ.get("SYNTH_DUR", 0)) or max(19.0, round(BATS_AT_SCRIPT + 9.7, 1))  # dơi 5.8 s + end card 3.6 s + đuôi; SYNTH_DUR=<s> để đổi
+DUR = float(os.environ.get("SYNTH_DUR", 0)) or max(19.0, round(BATS_AT_SCRIPT + 9.7, 1))  # bats 5.8 s + end card 3.6 s + tail; SYNTH_DUR=<s> to override
 N = int(SR * DUR)
-FPS = 60                     # simulator ghi ở 60 Hz: nhịp haptic, commit nét, vật lý nhảy tính theo frame
+FPS = 60                     # the simulator records at 60 Hz: haptic rhythm, stroke commits, jump physics run per frame
 rng = np.random.default_rng(31)
 t_all = np.arange(N) / SR
 
 
-# ───────────────────────── camera xem (port scene/view.ts + phần camera trong PumpkinScene) ─────────────────────────
+# ───────────────────────── view camera (port of scene/view.ts + the camera part of PumpkinScene) ─────────────────────────
 X0, Y0, Z0 = (np.array(r, float) for r in CAM["rot"])
 F0 = CAM["f"]
 CX, CY = VIEW_W / 2, VIEW_H / 2
@@ -175,7 +175,7 @@ def ease_io3(u):
 
 
 def demo_look(t):
-    """port demoLook(): yaw/pitch nội suy smoothstep giữa các mốc"""
+    """port of demoLook(): yaw/pitch smoothstep-interpolated between keyframes"""
     if not LOOK or t <= LOOK[0][0] or t >= LOOK[-1][0]:
         return 0.0, 0.0
     for a, b in zip(LOOK, LOOK[1:]):
@@ -202,7 +202,7 @@ def demo_tilt(t, lit_at):
 
 
 def view_at(t, lit_at=-1.0):
-    """camera xem tại t: intro + nhìn quanh + nghiêng (DEMO). v2 không có intro/look → gần như đứng yên."""
+    """view camera at t: intro + look-around + tilt (DEMO). v2 has no intro/look → almost static."""
     iu = 1 - ease_io3((t - INTRO["delay"]) / INTRO["dur"]) if INTRO else 0.0
     dy, dp = demo_look(t)
     tx, ty = demo_tilt(t, lit_at)
@@ -217,8 +217,8 @@ def path_len(p):
 
 
 def simulate():
-    """Chạy lại vòng frame-callback của PumpkinScene ở 60 fps: ngón tay ảo (toạ độ màn hình qua camera xem), nhịp haptic
-    'select' (mỗi >18 pt), frame commit nét. Trả về: [(stroke, t_bắt_đầu, t_commit, [(t_tick, x, y)], [(t, x, y)])]"""
+    """Re-runs the PumpkinScene frame-callback loop at 60 fps: virtual finger (screen coords through the view camera), haptic
+    'select' ticks (every >18 pt), stroke commit frame. Returns: [(stroke, t_start, t_commit, [(t_tick, x, y)], [(t, x, y)])]"""
     out, idx, finger, saw = [], 0, None, 0.0
     ticks, path = [], []
     screen_ticks = "baseToScreen(b, s.pts[(n - 1)" in open(os.path.join(ROOT, "app", "src", "scene", "PumpkinScene.tsx")).read()
@@ -250,9 +250,9 @@ def simulate():
 
 
 CARVE = simulate()
-# frame đầu tiên có u = (t − matchAt)/matchDur ≥ 1 (cùng phép tính dấu phẩy động như JS) → lightUp()
+# first frame with u = (t − matchAt)/matchDur ≥ 1 (same floating-point maths as JS) → lightUp()
 LIT_AT = next(f / FPS for f in range(int(40 * FPS)) if (f / FPS - MATCH_AT) / MATCH_DUR >= 1)
-CANDLE_AT = LIT_AT + 0.39                                             # withDelay(390) → nến bùng
+CANDLE_AT = LIT_AT + 0.39                                             # withDelay(390) → candle flares
 TILT0, TILT1 = LIT_AT + 1.2, LIT_AT + 1.2 + 3.6
 BATS_AT = next(f / FPS for f in range(int(40 * FPS)) if f / FPS >= max(BATS_AT_SCRIPT, LIT_AT))
 MATCH_REST = (352.0, 800.0)
@@ -263,9 +263,9 @@ def pan_x(x, k=1.0):
     return float(np.clip((x - VIEW_W / 2) / (VIEW_W / 2) * k, -1, 1))
 
 
-# ───────────────────────── DSP cơ bản (cùng cách với goku-vs-frieza) ─────────────────────────
+# ───────────────────────── basic DSP (same approach as goku-vs-frieza) ─────────────────────────
 def band(x, lo, hi, order=4):
-    """Lọc dải bằng FFT, sườn mềm (order 4 ≈ 24 dB/oct)."""
+    """FFT band-pass, soft slopes (order 4 ≈ 24 dB/oct)."""
     X = np.fft.rfft(x)
     f = np.fft.rfftfreq(len(x), 1 / SR)
     m = 1 / (1 + (lo / np.maximum(f, 1)) ** order) / (1 + (f / hi) ** order)
@@ -273,7 +273,7 @@ def band(x, lo, hi, order=4):
 
 
 def ns(sec):
-    """giây → số mẫu (làm tròn, để mọi mảng cùng độ dài khớp nhau)"""
+    """seconds → samples (rounded, so all arrays of the same duration match)"""
     return int(round(sec * SR))
 
 
@@ -283,7 +283,7 @@ def env(n, a, d, shape=4.0):
 
 
 def fades(x, a=0.003, r=0.006):
-    """fade ngắn hai đầu → không có tiếng tách ở biên đoạn"""
+    """short fades at both ends → no clicks at segment boundaries"""
     n = len(x)
     ia, ir = max(1, int(a * SR)), max(1, int(r * SR))
     e = np.ones(n)
@@ -293,7 +293,7 @@ def fades(x, a=0.003, r=0.006):
 
 
 def damped(f, sec, decay, f_end=None):
-    """sin tắt dần (có thể trượt cao độ) — thân gỗ, vỏ bí rỗng, âm trầm"""
+    """decaying sine (optional pitch glide) — wood bodies, hollow pumpkin shell, low end"""
     n = ns(sec)
     t = np.arange(n) / SR
     fr = f if f_end is None else f * (f_end / f) ** (t / sec)
@@ -304,14 +304,14 @@ _bank = {}
 
 
 def nb(lo, hi, sec):
-    """lát nhiễu đã lọc dải (RMS 1) cắt ngẫu nhiên từ một kho dài 6 s — nhanh hơn lọc từng hạt"""
+    """band-filtered noise slice (RMS 1) cut randomly from a 6 s pool — faster than filtering each grain"""
     key = (lo, hi)
     if key not in _bank:
         x = band(rng.standard_normal(6 * SR), lo, hi)
         _bank[key] = x / x.std()
     x = _bank[key]
     n = ns(sec)
-    if n > len(x) // 2:                      # lớp nền dài: lọc riêng một đoạn mới (không lặp kho)
+    if n > len(x) // 2:                      # long bed layer: filter a fresh segment (don't loop the pool)
         y = band(rng.standard_normal(n), lo, hi)
         return y / y.std()
     i = rng.integers(0, len(x) - n - 1)
@@ -319,7 +319,7 @@ def nb(lo, hi, sec):
 
 
 def smooth_noise(sec, rate, lo=0.0):
-    """đường cong ngẫu nhiên mượt (≈ rate Hz), 0..1 — gió, chập chờn lửa"""
+    """smooth random curve (≈ rate Hz), 0..1 — wind, flame flicker"""
     n = ns(sec)
     k = max(2, int(sec * rate) + 3)
     v = rng.random(k)
@@ -334,7 +334,7 @@ def hz(midi):
 
 
 def ramp(points):
-    """đường tự động hoá âm lượng theo (giây, giá trị), nội suy tuyến tính trên cả clip"""
+    """volume automation curve from (seconds, value) pairs, linearly interpolated over the whole clip"""
     ts, vs = zip(*sorted(points, key=lambda p: p[0]))
     return np.interp(t_all, ts, vs)
 
@@ -357,7 +357,7 @@ class Bus:
         self.R[i:i + len(s)] += s * np.sqrt((1 + pan) / 2) * 1.414
 
     def put_moving(self, sig, at, gain, pans):
-        """pan thay đổi theo mẫu (mảng cùng độ dài sig)"""
+        """per-sample pan (array the same length as sig)"""
         i = int(round(at * SR))
         if i >= N:
             return
@@ -371,7 +371,7 @@ class Bus:
 
 
 def reverb(x, sec=1.4, damp=5000, seed=1):
-    """vang: tích chập nhiễu suy giảm mũ, hai kênh khác nhau → rộng"""
+    """reverb: convolution with exponentially decaying noise, different per channel → wide"""
     r = np.random.default_rng(seed)
     n = ns(sec)
     t = np.arange(n) / SR
@@ -390,10 +390,10 @@ def norm_peak(st, peak):
     return st * (peak / max(np.abs(st).max(), 1e-9))
 
 
-# ═════════════════════════ 1. KHẮC: dao bếp cưa qua thịt bí chắc, ướt — chỉ kêu khi ngón tay đang đi trên nét ═════════════════════════
-# Mọi thứ bám đúng đường đi của ngón tay ảo (mô phỏng frame ở trên): to/sáng khi đi nhanh, gần như lặng khi bẻ góc.
-# Dải năng lượng chủ yếu 150 Hz–3 kHz: không xì, không tiếng kim loại rít, không lấp lánh trên ~5 kHz.
-# rng riêng để phần khắc không làm lệch chuỗi ngẫu nhiên của các phần khác.
+# ═════════════════════════ 1. CARVING: a kitchen knife sawing through firm, wet pumpkin flesh — only sounds while the finger is moving along the stroke ═════════════════════════
+# Everything follows the virtual finger's path exactly (frame simulation above): loud/bright when moving fast, almost silent when turning corners.
+# Energy mostly in 150 Hz–3 kHz: no hiss, no metallic screech, no sparkle above ~5 kHz.
+# Own rng so carving doesn't shift the random sequence of the other sections.
 krng = np.random.default_rng(4242)
 
 
@@ -403,8 +403,8 @@ def knoise(n, lo, hi):
 
 
 def grains(rate, lo, hi, dur_ms, dec_ms, cap=3.0):
-    """chuỗi hạt ngắn (xơ bí đứt, bọt ướt): xung Poisson theo tốc độ rate(t) (mảng, hạt/s), chập với vài nhân nhiễu
-    dải hẹp tắt nhanh; biên độ phân bố mũ, chặn trên để không hạt nào nhô hẳn ra"""
+    """train of short grains (snapping pumpkin fibres, wet bubbles): Poisson impulses at rate(t) (array, grains/s), convolved with a few
+    fast-decaying narrow-band noise kernels; exponentially distributed amplitude, capped so no grain sticks out"""
     n = len(rate)
     out = np.zeros(n)
     for _ in range(4):
@@ -419,41 +419,41 @@ def grains(rate, lo, hi, dur_ms, dec_ms, cap=3.0):
 
 
 def cut_sound(path, t_start, t_end, ref_speed):
-    """tiếng cắt một nét: path = [(t, x, y)] vị trí ngón tay theo frame. Trả về (tín hiệu mono, mảng pan)."""
+    """cutting sound for one stroke: path = [(t, x, y)] finger position per frame. Returns (mono signal, pan array)."""
     sec = t_end - t_start
     n = ns(sec)
     tt = np.arange(n) / SR
     P = np.array([(t_start, path[0][1], path[0][2])] + list(path))
-    # tốc độ ngón tay (pt/s) + hệ số bẻ góc (góc rẽ giữa hai đoạn liên tiếp → dao xoay tại chỗ, gần như không cắt)
+    # finger speed (pt/s) + corner factor (turn angle between consecutive segments → the knife pivots in place, barely cutting)
     d = np.diff(P[:, 1:], axis=0)
     v = np.hypot(d[:, 0], d[:, 1]) / np.maximum(np.diff(P[:, 0]), 1e-3)
     ang = np.zeros(len(d))
     for j in range(1, len(d) - 1):
-        a, b = d[j - 1] + d[j], d[j] + d[j + 1]                       # hướng trung bình 2 frame trước / sau
+        a, b = d[j - 1] + d[j], d[j] + d[j + 1]                       # average direction over the 2 frames before / after
         na, nb_ = np.hypot(*a), np.hypot(*b)
         if na > 1e-6 and nb_ > 1e-6:
             ang[j] = math.acos(float(np.clip(np.dot(a, b) / (na * nb_), -1, 1)))
     corner = np.clip(1 - ang / (0.45 * math.pi), 0.06, 1)
-    corner = np.convolve(corner, np.ones(5) / 5, "same")             # góc ảnh hưởng ±2 frame
+    corner = np.convolve(corner, np.ones(5) / 5, "same")             # corners affect ±2 frames
     sp = np.clip(v * corner / ref_speed, 0, 1.3)
     tf = P[1:, 0] - t_start
     s = np.interp(tt, tf, sp)
-    s = np.convolve(s, np.ones(ns(0.04)) / ns(0.04), "same")         # mượt 40 ms
+    s = np.convolve(s, np.ones(ns(0.04)) / ns(0.04), "same")         # 40 ms smoothing
     level = s ** 0.9
-    # nhịp cưa tới–lui 5–7 Hz (nhanh hơn khi kéo nhanh), có lệch nhịp nhẹ như tay người
+    # back-and-forth sawing at 5–7 Hz (faster when dragging fast), with slight timing drift like a human hand
     f_saw = (5.0 + 2.0 * np.clip(s, 0, 1)) * (1 + 0.08 * (smooth_noise(sec, 1.5) - 0.5))
-    ph = 2 * np.pi * np.cumsum(f_saw / 2) / SR                       # một chu kỳ = một lượt tới + một lượt lui
+    ph = 2 * np.pi * np.cumsum(f_saw / 2) / SR                       # one cycle = one forward + one backward stroke
     half = np.abs(np.sin(ph))
     saw = half ** 1.3
-    push = np.sin(ph) > 0                                            # lượt đẩy dao: chắc, sáng hơn chút
-    # (a) thân: tiếng 'sạt' đục của lưỡi dao trong thịt bí (dải thấp-trung + formant khoang ướt)
+    push = np.sin(ph) > 0                                            # push stroke: firmer, a bit brighter
+    # (a) body: the dull 'shhk' of the blade in the flesh (low-mid band + wet cavity formant)
     body = knoise(n, 150, 850) * 0.8 + knoise(n, 450, 1400) * (0.35 + 0.25 * push) * np.clip(s, 0, 1)
     body *= (0.18 + 0.82 * saw) * level
-    # (b) giòn: xơ bí đứt li ti dày theo tốc độ dao + nhịp cưa
+    # (b) crisp: tiny snapping fibres, density follows knife speed + sawing rhythm
     crunch = grains(260 * level * (0.25 + 0.75 * saw), 450, 2400, 9, 1.6) * 0.55
-    # (c) bọt ướt: 'tách' mềm, thưa
+    # (c) wet bubbles: soft, sparse 'ticks'
     wet = grains(9 * level, 500, 1500, 18, 4.0, 2.0) * 0.9
-    # (d) xơ dài bị xé: thỉnh thoảng một chuỗi xung dày 40–70 ms
+    # (d) long fibres tearing: an occasional dense 40–70 ms burst
     tear = np.zeros(n)
     tq = krng.exponential(0.5)
     while tq < sec - 0.08:
@@ -463,7 +463,7 @@ def cut_sound(path, t_start, t_end, ref_speed):
             rate = np.full(m, krng.uniform(140, 260))
             tear[k:k + m] += grains(rate, 600, 2200, 5, 0.9) * np.sin(np.pi * np.arange(m) / m) * 0.7 * level[k]
         tq += krng.exponential(0.5)
-    # (e) nhóp: mỗi lượt cưa bắt đầu có một tiếng 'nhóp' trầm (dao ép thịt ướt), trượt xuống 240→170 Hz
+    # (e) squelch: each sawing stroke starts with a low 'squelch' (knife pressing wet flesh), gliding down 240→170 Hz
     squelch = np.zeros(n)
     starts = np.where(np.diff(np.floor(ph / np.pi)) > 0)[0]
     for k in starts:
@@ -474,37 +474,37 @@ def cut_sound(path, t_start, t_end, ref_speed):
             squelch[k:k + m] += np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t_ / 0.018) * np.minimum(t_ / 0.003, 1) \
                 * 0.45 * level[k]
     x = body + crunch + wet + tear + squelch
-    x = band(x, 140, 3000)                                           # giữ 150 Hz–3 kHz, cắt hẳn dải xì
+    x = band(x, 140, 3000)                                           # keep 150 Hz–3 kHz, cut the hiss band completely
     x = fades(x, 0.025, 0.03)
     pans = np.interp(tt, tf, [pan_x(p[1], 1.4) for p in P[1:]])
     return x, pans, float(np.mean(level))
 
 
 def hole_pop(size):
-    """mảnh vỏ bị đẩy vào lòng bí: 'thóc' rỗng mềm + 'chụt' hút ướt, ngắn (~0.2 s)"""
+    """skin piece pushed into the pumpkin: soft hollow 'thock' + wet sucking 'schlup', short (~0.2 s)"""
     sec = 0.25
     n = ns(sec)
     t_ = np.arange(n) / SR
     f0 = 210 - 50 * size
-    x = damped(f0, sec, 26, f0 * 0.8) * 0.9 + damped(f0 * 2.05, sec, 45) * 0.2   # khoang bí rỗng
+    x = damped(f0, sec, 26, f0 * 0.8) * 0.9 + damped(f0 * 2.05, sec, 45) * 0.2   # hollow pumpkin cavity
     suck = np.sin(2 * np.pi * np.cumsum(620 * (0.38 ** np.clip(t_ / 0.06, 0, 1))) / SR) * env(n, 0.004, 0.05, 4)
     x += suck * 0.35 + knoise(n, 200, 1200) * env(n, 0.002, 0.025, 4) * 0.35
     return fades(band(x * np.minimum(t_ / 0.0015, 1), 100, 2500), 0.0015, 0.04)
 
 
 def tap(seed):
-    """một vụn/hạt bí chạm sàn gỗ hiên: tách gỗ có thân (600–1000 Hz), hạt bí nhẹ + cao hơn"""
+    """one pumpkin bit/seed hitting the wooden porch floor: wood tick with body (600–1000 Hz), seeds lighter + higher"""
     sec = 0.06
     n = ns(sec)
     f = (650 + 350 * rng.random()) * (1.5 if seed else 1.0)
     x = damped(f, sec, 90) * 0.6 + damped(f * 2.3, sec, 160) * 0.2
     x += nb(1200, 4500, sec) * env(n, 0.0005, 0.006, 5) * 0.7
-    x += nb(150, 600, sec) * env(n, 0.001, 0.02, 5) * (0.0 if seed else 0.5)  # vụn thịt: hơi ướt, có 'bẹp'
+    x += nb(150, 600, sec) * env(n, 0.001, 0.02, 5) * (0.0 if seed else 0.5)  # flesh bits: slightly wet, a little 'splat'
     return fades(x * np.minimum(np.arange(n) / (0.0004 * SR), 1), 0.0004, 0.01)
 
 
 def particle_landings(cx, cy, rx, ry, t_burst):
-    """port fx/Particles.tsx: 26 hạt/lần, thời điểm chạm thềm lần 1 + lần nảy (vy = -0.32·v_chạm)"""
+    """port of fx/Particles.tsx: 26 particles per burst, first floor-hit time + bounce (vy = -0.32·v_impact)"""
     G, floor0 = 900.0, CENTER[1] + CROP[2] * 0.33
     out = []
     for i in range(26):
@@ -517,19 +517,19 @@ def particle_landings(cx, cy, rx, ry, t_burst):
         vy = math.sin(ang) * sp * 0.4 - 120 - r3 * 120
         floor = floor0 + r3 * 40
         tc = (-vy + math.sqrt(max(vy * vy + 2 * G * (floor - sy), 0))) / G
-        if tc > 1.5:                       # LIFE = 1.5: hạt đã mờ hết trước khi chạm
+        if tc > 1.5:                       # LIFE = 1.5: particle fully faded before landing
             continue
         v_imp = vy + G * tc
         x_land = sx + vx * tc
         size = 2.0 + r2 * 3.4
         out.append((t_burst + delay + tc, x_land, size, i % 4 == 0, 1.0))
-        tb = 2 * 0.32 * v_imp / G           # nảy lên rồi chạm lại
+        tb = 2 * 0.32 * v_imp / G           # bounces up then lands again
         if delay + tc + tb < 1.5:
             out.append((t_burst + delay + tc + tb, x_land + vx * 0.5 * tb, size, i % 4 == 0, 0.3))
     return out
 
 
-carve_cut = Bus()                                                    # tiếng cắt (mức tuyệt đối đặt sau khi chuẩn đỉnh)
+carve_cut = Bus()                                                    # cutting sound (absolute level set after peak normalisation)
 carve_pop = Bus()
 carve_patter = Bus()
 CUT_WIN = []
@@ -539,21 +539,21 @@ for k, (s, t_start, t_commit, ticks, path) in enumerate(CARVE):
     ys = [p[1] for p in s["pts"]]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     rx, ry = (max(xs) - min(xs)) / 2, (max(ys) - min(ys)) / 2
-    size = min(1.0, (rx * ry) / (60 * 20 * K * K))     # miệng = 1, mắt ~0.5, mũi ~0.1
+    size = min(1.0, (rx * ry) / (60 * 20 * K * K))     # mouth = 1, eyes ~0.5, nose ~0.1
     L = path_len(s["pts"])
     EVENTS.append(f"stroke{k}: len {L:.1f} pt @ {s['speed']:.1f} pt/s = {L / s['speed']:.3f} s; finger {t_start - 0.25:.3f}, "
                   f"cut {t_start:.3f}–{t_commit:.3f}, pop {t_commit + 0.12:.3f}")
     x, pans, lv = cut_sound(path, t_start, t_commit, K * 200)
     carve_cut.put_moving(x * (0.85 + 0.15 * min(1, s["speed"] / (K * 200))), t_start, 1.0, pans)
     CUT_WIN.append((t_start, t_commit))
-    # nét xong: mảnh vỏ lún vào cùng lúc vụn bắn (burst t = commit + 0.12), vụn + hạt bí lộp độp trên thềm
+    # stroke done: skin piece sinks in as the bits burst (burst t = commit + 0.12), bits + seeds patter on the porch
     p = pan_x(cx, 1.4)
     carve_pop.put(hole_pop(size), t_commit + 0.12, 0.7 + 0.3 * size, p)
     for t_land, x_, sz, seed, g in particle_landings(cx, cy, rx, ry, t_commit + 0.12):
         carve_patter.put(tap(seed), t_land, g * (0.5 + 0.5 * sz / 5.4) * rng.uniform(0.6, 1.2), pan_x(x_, 1.3))
 
 
-# ═════════════════════════ 2. QUE DIÊM ═════════════════════════
+# ═════════════════════════ 2. MATCH ═════════════════════════
 match = Bus()
 
 
@@ -564,21 +564,21 @@ def match_xy(t):
         MATCH_REST[1] + (MATCH_TGT[1] - MATCH_REST[1]) * e - math.sin(math.pi * e) * 70
 
 
-# quẹt: nhám giấy ráp, sần (điều biên ngẫu nhiên), 0.11 s ngay trước lúc đầu diêm bắt lửa
+# strike: sandpaper rasp, gritty (random amplitude modulation), 0.11 s right before the match head ignites
 sec = 0.11
 n = ns(sec)
 scr = nb(1200, 6500, sec) * (0.4 + 0.6 * smooth_noise(sec, 180)) * np.clip(np.arange(n) / (0.015 * SR), 0, 1)
 scr *= np.clip((n - np.arange(n)) / (0.02 * SR), 0, 1)
 match.put(fades(scr), MATCH_AT - 0.07, 0.6, pan_x(MATCH_REST[0]))
-# bùng lưu huỳnh: 'phựt-xèèè' — tấn công nhanh, lùi về mức cháy; thêm lụp bụp nhỏ trong 0.3 s đầu
-sec = LIT_AT + 0.12 - (MATCH_AT - 0.02)                             # cháy tới lúc thả diêm vào miệng
+# sulphur flare: 'fft-sssss' — fast attack, settling to the burn level; plus small pops in the first 0.3 s
+sec = LIT_AT + 0.12 - (MATCH_AT - 0.02)                             # burns until the match is dropped into the mouth
 n = ns(sec)
 tt = np.arange(n) / SR
 flare_env = np.minimum(tt / 0.018, 1) * (0.18 + 0.82 * np.exp(-tt / 0.16))
-flare_env *= np.clip((sec - tt) / 0.22, 0, 1)                      # tắt nhanh quanh 9.5 s → khoảng tối gần như im
+flare_env *= np.clip((sec - tt) / 0.22, 0, 1)                      # dies fast around 9.5 s → near silence in the dark gap
 flare = nb(500, 5200, sec) * 0.7 + nb(90, 450, sec) * 0.5 * np.exp(-tt / 0.08)
 flare = flare * flare_env * (0.85 + 0.15 * smooth_noise(sec, 25))
-for _ in range(60):                                                # lách tách khi cháy (dày lúc bùng)
+for _ in range(60):                                                # crackle while burning (dense at the flare)
     tc = rng.exponential(0.25)
     if tc > 1.1:
         continue
@@ -587,7 +587,7 @@ for _ in range(60):                                                # lách tách
     flare[k:k + m] += nb(1500, 5000, 0.003) * np.exp(-np.arange(m) / (0.0007 * SR)) * rng.uniform(0.2, 0.8) * (0.4 + np.exp(-tc / 0.2))
 pans = np.array([pan_x(match_xy(MATCH_AT - 0.02 + x)[0]) for x in tt[::480]])
 match.put_moving(fades(flare, 0.001, 0.02), MATCH_AT - 0.02, 0.55, np.interp(tt, tt[::480], pans))
-# lửa lia theo cung: gió lửa 'phù' theo vận tốc (vận tốc ∝ sin(πu))
+# flame swept along an arc: 'whoof' of flame wind by velocity (velocity ∝ sin(πu))
 sec = MATCH_DUR
 n = ns(sec)
 tt = np.arange(n) / SR
@@ -597,9 +597,9 @@ match.put_moving(fades(sw, 0.02, 0.05), MATCH_AT, 0.18, np.array([pan_x(match_xy
 EVENTS.append(f"match: finger {MATCH_AT - 0.3:.3f}, strike {MATCH_AT - 0.07:.3f}, ignite {MATCH_AT:.3f}, drag {MATCH_AT:.3f}–{MATCH_AT + MATCH_DUR:.3f}")
 
 
-# ═════════════════════════ 3. TẮT ĐÈN HIÊN → NẾN BÙNG → LỬA NẾN ═════════════════════════
+# ═════════════════════════ 3. PORCH LIGHT OFF → CANDLE FLARE → CANDLE FLAME ═════════════════════════
 fire = Bus()
-# công tắc: hai tiếng tách cơ khí cách 7 ms + thân 'cộp' trầm, hơi xa (đèn hiên phía trên)
+# switch: two mechanical clicks 7 ms apart + a low 'clunk' body, slightly distant (porch light overhead)
 sec = 0.2
 n = ns(sec)
 clk = np.zeros(n)
@@ -609,11 +609,11 @@ for d, g in ((0.0, 1.0), (0.007, 0.55)):
     clk[k:k + m] += nb(1400, 5000, 0.012) * np.exp(-np.arange(m) / (0.0012 * SR)) * g
 clk += damped(130, sec, 30, 95) * 0.45 + damped(2300, sec, 140) * 0.15
 fire.put(fades(clk * np.minimum(np.arange(n) / (0.0003 * SR), 1)), LIT_AT, 0.4, pan_x(LAYOUT["lantern"][0]))
-# hít vào rất khẽ (ngược) trong bóng tối, dẫn vào tiếng bùng
+# very faint (reversed) inhale in the dark, leading into the flare
 sec = 0.22
 n = ns(sec)
 fire.put(nb(250, 1800, sec) * (np.arange(n) / n) ** 3 * 0.25, CANDLE_AT - sec, 1.0, 0.0)
-# 'PHỪNG': khối khí bùng (lọc thấp, mở sáng rồi đóng) + trầm nở 70→42 Hz + ngọn lửa xoè
+# 'WHOOMP': burst of air (low-passed, opening bright then closing) + low end blooming 70→42 Hz + flame spreading
 sec = 1.8
 n = ns(sec)
 tt = np.arange(n) / SR
@@ -624,7 +624,7 @@ whoomp = body * 0.9 + air + sub
 fire.put(fades(whoomp, 0.001, 0.2), CANDLE_AT, 1.0, pan_x(FLAME[0]))
 EVENTS.append(f"porch off {LIT_AT:.3f}, blackout {LIT_AT:.3f}–{CANDLE_AT:.3f}, candle burst {CANDLE_AT:.3f}")
 
-# lửa nến liên tục: 'phù phù' trầm chập chờn + lách tách bấc/sáp, pan nhẹ theo độ nghiêng máy
+# continuous candle flame: low flickering 'fwoo fwoo' + wick/wax crackle, panned slightly by phone tilt
 candle = Bus()
 c0 = CANDLE_AT + 0.05
 sec = DUR - c0
@@ -634,7 +634,7 @@ tt = np.arange(n) / SR
 
 tilt = np.array([demo_tilt(c0 + x, LIT_AT)[0] for x in tt[::240]])
 tilt = np.interp(tt, tt[::240], tilt)
-tilt_v = np.abs(np.gradient(tilt) * SR)                              # tốc độ nghiêng → lửa bị lắc, phập phồng hơn
+tilt_v = np.abs(np.gradient(tilt) * SR)                              # tilt speed → the flame gets shaken, flutters more
 tilt_v = np.convolve(tilt_v, np.ones(4800) / 4800, "same")
 flick = smooth_noise(sec, 6, 0.35) * (0.8 + 0.2 * smooth_noise(sec, 1.3))
 roar = nb(110, 800, sec) * 0.6 + nb(500, 2200, sec) * 0.18
@@ -643,7 +643,7 @@ cr = np.zeros(n)
 tc = rng.exponential(1 / 6.5)
 while tc < sec - 0.05:
     k = int(tc * SR)
-    big = rng.random() < 0.12                                        # thỉnh thoảng sáp 'lộp' to hơn
+    big = rng.random() < 0.12                                        # occasional louder wax 'pop'
     m = int((0.006 if big else 0.003) * SR)
     g = rng.uniform(0.6, 1.0) if big else rng.uniform(0.15, 0.5)
     cr[k:k + m] += nb(900 if big else 1600, 4500, m / SR) * np.exp(-np.arange(m) / ((0.0015 if big else 0.0007) * SR)) * g
@@ -652,12 +652,12 @@ cbed = roar * 0.5 + cr * 0.9
 candle.put_moving(fades(cbed, 0.01, 0.1), c0, 1.0, pan_x(FLAME[0]) + tilt * 0.35)
 
 
-# ═════════════════════════ 4. NGHIÊNG MÁY: không khí thở, âm khí dâng ═════════════════════════
+# ═════════════════════════ 4. PHONE TILT: breathing air, rising air tone ═════════════════════════
 air_bus = Bus()
 sec = TILT1 - TILT0 + 0.6
 n = ns(sec)
 tt = np.arange(n) / SR
-# dải nhiễu có tâm trượt 450 → 1600 Hz (cộng 3 dải chồng mờ dần), bao dâng chậm rồi lặng xuống trước dơi
+# noise band with centre gliding 450 → 1600 Hz (3 overlapping fading bands), envelope rises slowly then fades before the bats
 u = tt / sec
 lo = nb(300, 900, sec) * (1 - u)
 mid = nb(600, 1800, sec) * np.sin(np.pi * u)
@@ -668,17 +668,17 @@ air_bus.put_moving(fades(airy, 0.3, 0.3), TILT0, 1.0, tl * 0.7)
 EVENTS.append(f"tilt {TILT0:.3f}–{TILT1:.3f}")
 
 
-# ═════════════════════════ 5. ĐÀN DƠI XẾP CHỮ (fx/Bats.tsx: 390 con → "HAPPY HALLOWEEN / @novahoangdev") ═════════════════════════
-# Không port quỹ đạo từng con nữa (390 con): tổng hợp theo PHA, mốc đọc từ BAT_TIMES trong Bats.tsx (tính từ lúc dơi ra):
-#   ùa ra 0 → emergeEnd (dày dần, dòng chạy trái → phải) · rẽ về chữ ~0.45 → formed (thưa dần, xoáy nhẹ) ·
-#   GIỮ CHỮ formed → holdEnd (rì rào trầm, chậm, nhỏ — khoảnh khắc tiêu đề, chừa chỗ) · tan ra holdEnd → +0.2 ·
-#   lao qua ống kính ~holdEnd+0.4 → gone−0.2 (loạt 'vút' sát tai, rộng stereo, to nhất ~holdEnd+0.8) · hết ở gone.
-# Mức ở đây là dBFS tuyệt đối (trộn sau khi chuẩn đỉnh, như mưa/sấm/khắc). rng riêng.
+# ═════════════════════════ 5. BAT SWARM SPELLS TEXT (fx/Bats.tsx: 390 bats → "HAPPY HALLOWEEN / @novahoangdev") ═════════════════════════
+# No longer porting each bat's path (390 bats): synthesised by PHASE, timings read from BAT_TIMES in Bats.tsx (relative to bat release):
+#   pour out 0 → emergeEnd (thickening, flow running left → right) · turn into the text ~0.45 → formed (thinning, slight swirl) ·
+#   HOLD TEXT formed → holdEnd (low rustle, slow, quiet — title moment, leave room) · disperse holdEnd → +0.2 ·
+#   rush past the lens ~holdEnd+0.4 → gone−0.2 (burst of close 'whooshes', wide stereo, loudest ~holdEnd+0.8) · ends at gone.
+# Levels here are absolute dBFS (mixed after peak normalisation, like rain/thunder/carving). Own rng.
 BATS_TS = open(os.path.join(ROOT, "app", "src", "fx", "Bats.tsx")).read()
 BAT_COUNT = int(re.search(r"BAT_COUNT\s*=\s*(\d+)", BATS_TS).group(1))
 BAT_DURATION = float(re.search(r"BAT_DURATION\s*=\s*([\d.]+)", BATS_TS).group(1))
 _m = re.search(r"BAT_TIMES\s*=\s*\{([^}]*)\}", BATS_TS)
-# mặc định = bảng trong notes/fx.md §9 nếu không đọc được BAT_TIMES
+# default = the table in notes/fx.md §9 if BAT_TIMES can't be read
 BT = dict(emergeEnd=1.25, formed=3.0, holdEnd=4.2, gone=BAT_DURATION)
 if _m:
     BT.update({k: float(v) for k, v in re.findall(r"(\w+):\s*([\d.]+)", _m.group(1))})
@@ -693,8 +693,8 @@ def bnoise(n, lo, hi):
 
 
 def swarm(sec, voices, fq_lo, fq_hi, lo, hi, bright_hi=None, bright=None, sharp=6):
-    """bầy cánh: nhiều 'giọng' vỗ cánh độc lập (mỗi giọng một tần số 6–12 Hz, pha ngẫu nhiên, xung ở nhịp hạ cánh) trên
-    nhiễu dải; hai kênh độc lập → rộng. bright (mảng 0..1) trộn thêm dải cao khi dơi ở gần."""
+    """wing swarm: many independent flapping 'voices' (each at its own 6–12 Hz, random phase, pulse on the downstroke) over
+    band noise; two independent channels → wide. bright (0..1 array) mixes in highs when bats are close."""
     n = ns(sec)
     t_ = np.arange(n) / SR
     out = np.zeros((n, 2))
@@ -715,7 +715,7 @@ def swarm(sec, voices, fq_lo, fq_hi, lo, hi, bright_hi=None, bright=None, sharp=
 
 
 def warp(x, rate):
-    """đọc tín hiệu với tốc độ thay đổi (rate > 1 → cao hơn): giả Doppler"""
+    """read the signal at a varying rate (rate > 1 → higher pitch): fake Doppler"""
     idx = np.cumsum(rate)
     idx -= idx[0]
     return np.interp(idx, np.arange(len(x)), x)
@@ -744,29 +744,29 @@ def add_b(sig, at):
 
 E, F, H = BT["emergeEnd"], BT["formed"], BT["holdEnd"]
 G_ = BT["gone"]
-R0, R1 = H + 0.4, G_ - 0.2                                           # lao qua ống kính
-R_PK = H + 0.8                                                       # to nhất (notes: ~29.9 = 24.9 + 5.0)
-# (1) BAY TỚI TỪ NGOÀI SÂN / TRỜI (Bats.tsx mới: không con nào chui ra từ quả bí). Bầy xuất phát ở sân tối bên trái-phía
-#     trước (x −4.6…−0.6 m, y 3.6–6.4 m) hoặc trời xa: lúc đầu xa → nhỏ, tối (mất dải cao), lệch trái; lao vào qua hiên về
-#     phía camera (Bézier 1.15–1.45 s, điểm lượn ở u = ½, thứ tự đến trễ 0–0.55 s) → to + sáng dần, pan về giữa, đỉnh
-#     ~0.8–1.3 s (vài con sượt ống kính); rồi vút lên vào chữ (camera ngước lên trời) → thưa, nhỏ dần tới lúc thành chữ
+R0, R1 = H + 0.4, G_ - 0.2                                           # rush past the lens
+R_PK = H + 0.8                                                       # loudest (notes: ~29.9 = 24.9 + 5.0)
+# (1) ARRIVE FROM THE YARD / SKY (new Bats.tsx: no bats come out of the pumpkin). The swarm starts in the dark yard front-
+#     left (x −4.6…−0.6 m, y 3.6–6.4 m) or the far sky: far at first → quiet, dark (no highs), panned left; rushes over the porch towards
+#     the camera (Bézier 1.15–1.45 s, waypoint at u = ½, arrival stagger 0–0.55 s) → louder + brighter, pan to centre, peak
+#     ~0.8–1.3 s (a few skim the lens); then shoots up into the text (camera looks up at the sky) → thinner, quieter until the text forms
 sec = F + 0.4
 n = ns(sec)
 t_ = np.arange(n) / SR
-PK_A = 1.05                                                          # bầy gần camera nhất (giữa Bézier + trễ trung bình)
-prox = np.clip(t_ / PK_A, 0, 1) ** 1.7                               # 0 = xa ngoài sân, 1 = sát hiên
+PK_A = 1.05                                                          # swarm closest to the camera (mid-Bézier + average delay)
+prox = np.clip(t_ / PK_A, 0, 1) ** 1.7                               # 0 = far out in the yard, 1 = right at the porch
 dens = np.where(t_ < PK_A, 0.12 + 0.88 * prox, np.exp(-(t_ - PK_A) / ((F - PK_A) / 1.7)))
 bright = np.clip(np.where(t_ < PK_A, prox, 1 - (t_ - PK_A) / (F - PK_A)), 0.05, 1)
 near = swarm(sec, 36, 9, 12, 250, 2400, 4500, bright)
-far = swarm(sec, 30, 8, 11, 150, 900)                                # xa: chỉ còn rì rào trầm
+far = swarm(sec, 30, 8, 11, 150, 900)                                # far: only a low rustle
 a = near * (dens * (0.3 + 0.7 * prox))[:, None] + far * (dens * (1 - prox) * 1.3)[:, None]
 a *= np.minimum(t_ / 0.6, 1)[:, None] ** 1.5 * np.clip((sec - t_) / 0.4, 0, 1)[:, None]
-pan_a = np.interp(t_, [0, PK_A, PK_A + 0.6, sec], [-0.8, -0.05, -0.25, -0.15])   # sân bên trái → giữa → lên trời (trái)
+pan_a = np.interp(t_, [0, PK_A, PK_A + 0.6, sec], [-0.8, -0.05, -0.25, -0.15])   # yard on the left → centre → up into the sky (left)
 a = pan_st(a, pan_a * 0.8)
 k_pk = ns(PK_A)
 a *= dbv(-22) / np.sqrt((a[max(0, k_pk - ns(0.25)):k_pk + ns(0.25)] ** 2).mean())
 add_b(a, BATS_AT)
-# (2) giữ chữ: rì rào trầm của rất nhiều cánh vỗ chậm, rộng, nhỏ; nở nhẹ lúc tan ra
+# (2) hold text: low rustle of very many slow flapping wings, wide, quiet; swells a little at dispersal
 sec = H - F + 1.0
 n = ns(sec)
 t_ = np.arange(n) / SR
@@ -775,7 +775,7 @@ he = np.clip(t_ / 0.5, 0, 1) * (1 + 1.5 * np.exp(-((t_ - (H - F + 0.3 + 0.1)) / 
 h *= he[:, None]
 h *= dbv(-34) / np.sqrt((h[ns(0.5):ns(H - F + 0.2)] ** 2).mean())
 add_b(h, BATS_AT + F - 0.3)
-# (3) lao qua ống kính: nền cánh ào lên rồi tắt + loạt 'vút' sát tai (Doppler giả, pan ra hẳn một bên)
+# (3) rush past the lens: wing bed surges then dies + burst of close 'whooshes' (fake Doppler, panned hard to one side)
 sec = G_ - H + 0.3
 n = ns(sec)
 t_ = np.arange(n) / SR
@@ -786,18 +786,18 @@ add_b(r, BATS_AT + H)
 passes = []
 n_fly = 14
 times = np.sort(R0 + (R1 - R0) * brng.beta(2.4, 2.4, n_fly))
-# + 5 con sượt ống kính lúc bầy lao vào hiên (skim: u ≈ ½ của Bézier 1.0–1.2 s, cộng thứ tự đến 0–0.55 s), nhỏ hơn đợt tan
+# + 5 bats skim the lens as the swarm rushes onto the porch (skim: u ≈ ½ of Bézier 1.0–1.2 s, plus arrival stagger 0–0.55 s), quieter than the dispersal wave
 SKIMS = np.sort(0.5 + 0.55 * brng.beta(2, 2, 5) + 0.55 * brng.random(5) * 0.3)
 times = np.concatenate([SKIMS, times])
 for j, tp in enumerate(times):
     side = -1 if j % 2 == 0 else 1
     if brng.random() < 0.25:
         side = -side
-    d0 = brng.uniform(0.1, 0.3)                                      # khoảng cách sượt qua ống kính (m)
+    d0 = brng.uniform(0.1, 0.3)                                      # distance when skimming the lens (m)
     v = brng.uniform(2.2, 3.2)                                       # m/s
     sec = 0.9
     n = ns(sec)
-    tau = np.arange(n) / SR - 0.55                                    # 0 = lúc ngang ống kính
+    tau = np.arange(n) / SR - 0.55                                    # 0 = when level with the lens
     dist = np.sqrt(d0 ** 2 + (v * tau) ** 2)
     vr = v * v * tau / dist
     gain = np.minimum(1.6, 0.25 / dist)
@@ -811,11 +811,11 @@ for j, tp in enumerate(times):
         * (0.12 + pulse)
     air = warp(bnoise(m, 140, 900), rate) * np.clip(gain ** 2 / 1.6, 0, 1) * 1.1
     sig = fades((flut + air) * gain * np.clip((0.35 - tau) / 0.25, 0, 1), 0.02, 0.02)
-    pans = side * np.clip(0.25 + 0.75 * np.clip((tau + 0.15) / 0.2, 0, 1), 0, 1)   # tiến vào từ giữa → vụt ra hẳn một bên
-    g = 0.55 + 0.45 * math.exp(-((tp - R_PK) / 0.35) ** 2) if tp > R0 - 0.1 else 0.45   # đậm nhất quanh R_PK
+    pans = side * np.clip(0.25 + 0.75 * np.clip((tau + 0.15) / 0.2, 0, 1), 0, 1)   # comes in from the centre → whips out hard to one side
+    g = 0.55 + 0.45 * math.exp(-((tp - R_PK) / 0.35) ** 2) if tp > R0 - 0.1 else 0.45   # strongest around R_PK
     add_b(pan_st(sig, pans) * g * dbv(-21) / 1.6, BATS_AT + tp - 0.55)
     passes.append((BATS_AT + tp, d0, "L" if side < 0 else "R"))
-# (4) vài tiếng chít: nhỏ, cao, đôi (FM trượt xuống) — 2 lúc ùa ra, 4 lúc lao qua
+# (4) a few squeaks: small, high, paired (FM gliding down) — 2 while pouring out, 4 while rushing past
 for tq, gq in [(0.75, -33), (1.1, -30)] + [(float(x), -25) for x in brng.uniform(R0, R1 - 0.1, 4)]:
     for rep in range(2):
         sec_q = 0.035
@@ -825,9 +825,9 @@ for tq, gq in [(0.75, -33), (1.1, -30)] + [(float(x), -25) for x in brng.uniform
         ch = np.sin(2 * np.pi * np.cumsum(f0 * (0.72 ** (tq_ / sec_q)) * (1 + 0.04 * np.sin(2 * np.pi * 60 * tq_))) / SR)
         ch *= np.sin(np.pi * tq_ / sec_q) ** 2 * dbv(gq)
         add_b(pan_st(ch, np.full(nq, brng.uniform(-0.7, 0.7))), BATS_AT + tq + rep * 0.06)
-# (5) bỏ: bản mới không còn đám lửa/khí bùng ra từ quả bí (FEEDBACK-2300 #5)
+# (5) removed: the new version no longer has the fire/air burst out of the pumpkin (FEEDBACK-2300 #5)
 bats_abs = np.stack([band(bats_abs[:, c], 60, 9000) for c in range(2)], 1)
-# hai bus cũ giữ cho phần trộn (giờ rỗng; dơi trộn ở mức tuyệt đối)
+# two old buses kept for the mix (now empty; bats are mixed at absolute level)
 bats, squeak_bus, bat_puff = Bus(), Bus(), Bus()
 EVENTS.append(f"bats {BATS_AT:.3f} ({BAT_COUNT} bats, BAT_TIMES {BT}): arrive from yard/sky (closest {BATS_AT + PK_A:.2f}), emerge {BATS_AT:.2f}–{BATS_AT + E:.2f}, "
               f"steer → {BATS_AT + F:.2f}, HOLD {BATS_AT + F:.2f}–{BATS_AT + H:.2f}, break {BATS_AT + H:.2f}–{BATS_AT + H + 0.2:.2f}, "
@@ -835,9 +835,9 @@ EVENTS.append(f"bats {BATS_AT:.3f} ({BAT_COUNT} bats, BAT_TIMES {BT}): arrive fr
               + ", ".join(f"{t:.2f}{s}" for t, _, s in passes))
 
 
-# ═════════════════════════ 6. ĐÊM: gió, dế, cú, ù đèn hiên ═════════════════════════
+# ═════════════════════════ 6. NIGHT: wind, crickets, owl, porch-light hum ═════════════════════════
 amb = Bus()
-# gió: nhiễu nâu-ish dải thấp (hai kênh lệch) + một chút rít dải trung, phồng xẹp chậm; thổi mạnh hơn lúc nghiêng
+# wind: brownish low-band noise (two offset channels) + a bit of mid-band whistle, slow swells; blows harder during tilt
 gust = smooth_noise(DUR, 0.25, 0.3) * (1 + 0.6 * np.exp(-((t_all - (TILT0 + TILT1) / 2) / 1.6) ** 2))
 for ch, pan in ((0, -0.7), (1, 0.7)):
     wnd = band(rng.standard_normal(N), 60, 520) + band(rng.standard_normal(N), 500, 1300) * 0.18 * smooth_noise(DUR, 0.4)
@@ -848,7 +848,7 @@ crick = Bus()
 for f0, pan, period in ((4300, -0.55, 0.95), (4700, 0.6, 1.25), (3900, 0.15, 1.6)):
     t = rng.uniform(0.1, 0.6)
     while t < DUR:
-        if rng.random() < 0.8:                                       # lác đác: thỉnh thoảng bỏ nhịp
+        if rng.random() < 0.8:                                       # sparse: occasionally skip a beat
             pulses = rng.integers(2, 5)
             for p in range(pulses):
                 sec = 0.018
@@ -860,7 +860,7 @@ for f0, pan, period in ((4300, -0.55, 0.95), (4700, 0.6, 1.25), (3900, 0.15, 1.6
 cricket_st = crick.stereo()
 
 owl = Bus()
-# cú kêu xa một lần: v2 lúc ~1.0 s; có cảnh nhìn quanh thì đúng lúc dừng lại ngước nhìn trăng (yaw âm, pitch cao nhất)
+# one distant owl hoot: v2 at ~1.0 s; with a look-around scene, right when it stops to look up at the moon (negative yaw, highest pitch)
 moon = [a[0] for a, b in zip(LOOK, LOOK[1:]) if a[1:] == b[1:] and a[1] < 0]
 OWL_AT = moon[0] + 0.1 if moon else 1.0
 for at, sec, f0, g in ((0.0, 0.32, 360, 0.8), (0.48, 0.22, 380, 0.6), (0.74, 0.62, 350, 1.0)):
@@ -868,38 +868,38 @@ for at, sec, f0, g in ((0.0, 0.32, 360, 0.8), (0.48, 0.22, 380, 0.6), (0.74, 0.6
     n = ns(sec)
     tt = np.arange(n) / SR
     u = tt / sec
-    f = f0 * (1 + 0.05 * np.sin(np.pi * u) - 0.04 * u)               # 'hú-u': hơi lên rồi trĩu xuống
+    f = f0 * (1 + 0.05 * np.sin(np.pi * u) - 0.04 * u)               # 'hoo-oo': rises slightly then sags
     ph = 2 * np.pi * np.cumsum(f) / SR
     v = np.sin(ph) + 0.12 * np.sin(2 * ph)
-    v = v * (1 + 0.35 * band(rng.standard_normal(n), 2, 30) / 3)    # hơi thở rung
+    v = v * (1 + 0.35 * band(rng.standard_normal(n), 2, 30) / 3)    # breathy tremolo
     v += band(rng.standard_normal(n), f0 * 0.8, f0 * 1.6) * 0.15
     e = np.minimum(u / 0.18, 1) * np.clip((1 - u) / 0.45, 0, 1) ** 1.3
     owl.put(fades(v * e), at, g, -0.55)
 owl_st = owl.stereo()
-owl_st = np.stack([band(owl_st[:, c], 200, 1400) for c in range(2)], 1)  # xa: mất dải cao
+owl_st = np.stack([band(owl_st[:, c], 200, 1400) for c in range(2)], 1)  # distant: highs lost
 
-hum = Bus()                                                          # bóng đèn hiên ù rất khẽ, tắt cùng công tắc
+hum = Bus()                                                          # porch bulb hums very faintly, off with the switch
 hx = sum(np.sin(2 * np.pi * f * t_all + rng.random() * 6) * g for f, g in ((120, 1.0), (240, 0.5), (360, 0.25), (480, 0.12)))
 hx *= np.clip((LIT_AT + 0.04 - t_all) / 0.04, 0, 1) * np.clip(t_all / 0.5, 0, 1)
 hum.put(hx, 0.0, 1.0, pan_x(LAYOUT["lantern"][0]))
 
 
-# ═════════════════════════ 6b. (v3) INTRO ZOOM · NHÌN QUANH · BÍ NHẢY VÀO DYNAMIC ISLAND ═════════════════════════
+# ═════════════════════════ 6b. (v3) INTRO ZOOM · LOOK AROUND · PUMPKIN JUMPS INTO THE DYNAMIC ISLAND ═════════════════════════
 intro_bus = Bus()
 if INTRO:
-    # camera lao từ xa vào (ease in-out bậc 3): gió lướt theo tốc độ zoom, riser sáng dần, đáp "uỳnh" mềm khi dừng
+    # camera rushes in from afar (cubic ease in-out): wind rush follows zoom speed, riser brightens, soft "boom" landing when it stops
     d0, dur = INTRO["delay"], INTRO["dur"]
     sec = dur + 0.9
     n = ns(sec)
     tt = np.arange(n) / SR
     u = np.clip(tt / dur, 0, 1)
-    speed = np.where(u < 0.5, 12 * u ** 2, 12 * (1 - u) ** 2) / 3          # đạo hàm ease, chuẩn về 0..1
-    after = np.clip(1 - (tt - dur) / 0.35, 0, 1)                           # đuôi sau khi đáp
+    speed = np.where(u < 0.5, 12 * u ** 2, 12 * (1 - u) ** 2) / 3          # ease derivative, normalised to 0..1
+    after = np.clip(1 - (tt - dur) / 0.35, 0, 1)                           # tail after landing
     whoosh = (nb(180, 900, sec) * (1 - u) + nb(450, 2200, sec) * np.sin(np.pi * u) + nb(1200, 4800, sec) * u * 0.45)
     whoosh *= (0.15 + 0.85 * speed) * np.minimum(tt / 0.25, 1) * np.where(tt < dur, 1.0, after)
     riser = nb(1800, 6500, sec) * u ** 3.2 * 0.4 * np.clip((dur + 0.03 - tt) / 0.03, 0, 1)
     sub = np.sin(2 * np.pi * np.cumsum(36 + 22 * u) / SR) * u ** 2 * 0.5 * np.where(tt < dur, 1.0, after ** 2)
-    pans = np.interp(tt, [0, dur], [INTRO["yaw"] * 2, 0])                 # bắt đầu lệch theo yaw −0.3 → về giữa
+    pans = np.interp(tt, [0, dur], [INTRO["yaw"] * 2, 0])                 # starts offset by yaw −0.3 → back to centre
     intro_bus.put_moving(fades(whoosh + riser + sub, 0.05, 0.1), d0, 1.0, pans)
     sec = 1.0
     n = ns(sec)
@@ -910,7 +910,7 @@ if INTRO:
 
 look_bus = Bus()
 if LOOK:
-    # nhìn quanh: gió lia mạnh theo tốc độ xoay (yaw/pitch), pan đi theo hướng nhìn
+    # look-around: strong wind sweep by rotation speed (yaw/pitch), pan follows the view direction
     l0, l1 = LOOK[0][0] - 0.05, LOOK[-1][0] + 0.35
     sec = l1 - l0
     n = ns(sec)
@@ -928,10 +928,10 @@ if LOOK:
     EVENTS.append("look: " + ", ".join(f"{a:.2f}→{b:.2f} ({'right' if d > 0 else 'left'})" for a, b, d in moves))
 
 
-# ── port fx/jump.ts: hằng số đọc thẳng từ file, máy trạng thái chạy lại theo frame 60 fps ──
+# ── port of fx/jump.ts: constants read straight from the file, state machine re-run per frame at 60 fps ──
 JUMP_TS = os.path.join(ROOT, "app", "src", "fx", "jump.ts")
-JEV = []                                                             # (loại, t, dữ liệu)
-JTRACK = []                                                          # (t, x màn hình, y màn hình) tâm bí khi bay vào/ra đảo
+JEV = []                                                             # (kind, t, data)
+JTRACK = []                                                          # (t, screen x, screen y) pumpkin centre while flying into/out of the island
 if TAPS and os.path.exists(JUMP_TS):
     JS = open(JUMP_TS).read()
 
@@ -1136,11 +1136,11 @@ if TAPS and os.path.exists(JUMP_TS):
             s.update(m=CROUCH, crouchEnd=t + (J["crouch"] if s["combo"] == 1 else J["crouchCombo"]), pending=to_island,
                      vy=0.0, h=0.0)
 
-    # vòng frame: callback (đặt anchor, ngón tay chạm) rồi reaction step(t) cùng frame
+    # frame loop: callback (set anchor, finger tap) then reaction step(t) in the same frame
     ti, off_x = 0, 0.0
     for f in range(int((TAPS[0] - 0.1) * FPS), int(DUR * FPS)):
         t = f / FPS
-        if ti >= len(TAPS) and S["m"] == REST:                       # đã nghỉ hẳn sau lần chạm cuối
+        if ti >= len(TAPS) and S["m"] == REST:                       # fully at rest after the last tap
             break
         A = anchor(t)
         if ti < len(TAPS) and t >= TAPS[ti]:
@@ -1151,7 +1151,7 @@ if TAPS and os.path.exists(JUMP_TS):
 else:
     JUMP_OK = False
     if TAPS:
-        print("WARN: thiếu app/src/fx/jump.ts — bỏ qua tiếng bí nhảy")
+        print("WARN: app/src/fx/jump.ts missing — skipping pumpkin jump sounds")
 
 jump_bus = Bus()
 
@@ -1161,7 +1161,7 @@ def j_at(kind):
 
 
 def knock(f=210.0):
-    """gõ vào vỏ bí rỗng: 'tọc' gỗ có khoang ngân"""
+    """knock on the hollow pumpkin shell: woody 'tok' with a ringing cavity"""
     sec = 0.3
     n = ns(sec)
     x = damped(f, sec, 14, f * 0.9) * 0.8 + damped(f * 2.6, sec, 32) * 0.25
@@ -1170,7 +1170,7 @@ def knock(f=210.0):
 
 
 def boing(level, sec=0.42):
-    """lò xo co giãn: cao độ vút nhẹ lên rồi rung lắc tắt dần — dễ thương, ấm (lọc dưới 2.5 kHz)"""
+    """spring squash-stretch: pitch swoops up a little then wobbles and decays — cute, warm (low-passed below 2.5 kHz)"""
     n = ns(sec)
     t = np.arange(n) / SR
     f0 = 150 * 1.22 ** level
@@ -1181,7 +1181,7 @@ def boing(level, sec=0.42):
 
 
 def porch_thud(strength, big=False):
-    """bí đáp xuống ván hiên: 'thịch' ván gỗ + thân bí, cú lớn thêm trầm 'uỳnh'"""
+    """pumpkin lands on the porch boards: wooden 'thud' + pumpkin body, big landings add a low 'boom'"""
     sec = 1.0 if big else 0.55
     n = ns(sec)
     x = damped(80, sec, 9, 58) + damped(165, sec, 16) * 0.45 + damped(230, sec, 22, 200) * 0.3
@@ -1192,7 +1192,7 @@ def porch_thud(strength, big=False):
 
 
 def leaves(strength):
-    """lá khô quanh chân bí lạo xạo: các hạt nhiễu khô 1.5–6 kHz, dày lúc đầu rồi thưa"""
+    """dry leaves rustling around the pumpkin: dry 1.5–6 kHz noise grains, dense at first then sparse"""
     sec = 0.5
     n = ns(sec)
     x = np.zeros(n)
@@ -1214,10 +1214,10 @@ def bell(f, sec=0.5, decay=7.0):
 if JUMP_OK:
     for t, d in j_at("launch"):
         p = pan_x(d["x"], 1.2)
-        jump_bus.put(knock(215 + 25 * d["level"]), t - 0.03, 0.45, p)          # ngón tay chạm/ép vỏ lúc nhún
+        jump_bus.put(knock(215 + 25 * d["level"]), t - 0.03, 0.45, p)          # finger taps/presses the shell on the squash
         jump_bus.put(boing(d["level"]), t, 0.32 + 0.06 * d["level"], p)
         sec = 0.18
-        jump_bus.put(nb(70, 420, sec) * env(ns(sec), 0.004, 0.08, 4), t, 0.35, p)  # 'phụp' rời đất
+        jump_bus.put(nb(70, 420, sec) * env(ns(sec), 0.004, 0.08, 4), t, 0.35, p)  # 'fwup' leaving the ground
     for t, d in j_at("kick"):
         p = pan_x(d["x"], 1.2)
         jump_bus.put(knock(265 + 20 * d["level"]), t, 0.35, p)
@@ -1235,7 +1235,7 @@ if JUMP_OK:
     if isl:
         it = isl[0][0]
         x0 = isl[0][1]["x"]
-        # vút lên: gió + còi trượt lên, nhanh – lơ lửng giữa chừng – bị hút (theo e = u + 0.15·sin 2πu)
+        # whoosh up: wind + rising whistle, fast – hangs midway – sucked in (follows e = u + 0.15·sin 2πu)
         sec = ARRIVE
         n = ns(sec)
         tt = np.arange(n) / SR
@@ -1249,14 +1249,14 @@ if JUMP_OK:
         jump_bus.put(boing(4, 0.35), it, 0.3, pan_x(x0, 1.2))
         jump_bus.put_moving(fades(wh * 0.6 + slide, 0.005, 0.03), it, 0.6, pans)
         arrive = j_at("arrive")[0][0]
-        # 'bloop' bị hút vào đảo: sin trượt 260→900 Hz rất nhanh + bọt 'póc'
+        # 'bloop' sucked into the island: very fast 260→900 Hz sine glide + bubbly 'pok'
         sec = 0.22
         n = ns(sec)
         tt = np.arange(n) / SR
         bl = np.sin(2 * np.pi * np.cumsum(260 * 3.5 ** np.clip(tt / 0.07, 0, 1)) / SR) * env(n, 0.003, 0.14, 4)
         bl += damped(1250, sec, 45) * 0.3 + nb(400, 2500, sec) * env(n, 0.0005, 0.01, 5) * 0.3
         jump_bus.put(fades(bl, 0.0005, 0.03), arrive, 0.55, 0.0)
-        # lấp lánh khi pill nở (Live Activity): hạt chuông ngũ cung Rê thứ cao + một lớp ngân run nhẹ
+        # sparkle as the pill expands (Live Activity): high D-minor pentatonic bell grains + a gently trembling sustain layer
         shake_t = j_at("shake")[0][0]
         hold = shake_t - arrive
         tc = arrive + 0.05
@@ -1270,9 +1270,9 @@ if JUMP_OK:
         sh = sum(np.sin(2 * np.pi * f * tt + rng.random() * 6) for f in (1174.7, 1760.0, 2349.3)) / 3
         sh *= (1 + 0.35 * np.sin(2 * np.pi * 6.5 * tt)) * np.clip(tt / 0.3, 0, 1) * np.clip((sec - tt) / 0.5, 0, 1)
         jump_bus.put(fades(sh, 0.01, 0.05), arrive, 0.09, 0.0)
-        for t, _ in j_at("success"):                                    # 'ting' xác nhận khi pill nở xong
+        for t, _ in j_at("success"):                                    # confirmation 'ting' once the pill finishes expanding
             jump_bus.put(bell(1760.0, 0.9, 4.5) + bell(2349.3, 0.9, 5) * 0.6, t, 0.12, 0.1)
-        # rung lắc trước khi nhả: 'bừbừ' như thạch rung + nén lại kêu chít lên
+        # wobble before release: jelly-like 'brrbrr' + squeezed squeak
         sec = IT["shake"] + IT["squeeze"]
         n = ns(sec)
         tt = np.arange(n) / SR
@@ -1281,7 +1281,7 @@ if JUMP_OK:
         sq = np.sin(2 * np.pi * np.cumsum(480 * 2.3 ** np.clip((tt - IT["shake"]) / IT["squeeze"], 0, 1)) / SR)
         sq *= np.clip((tt - IT["shake"]) / 0.02, 0, 1) * 0.5
         jump_bus.put(fades(wob * 0.5 + sq, 0.005, 0.01), shake_t, 0.3, 0.0)
-        # 'phụt' nhả ra + còi huýt rơi tới lúc chạm đất
+        # 'pfft' release + falling whistle until it hits the ground
         spit = j_at("spit")[0][0]
         sec = 0.25
         n = ns(sec)
@@ -1307,19 +1307,19 @@ if JUMP_OK:
     EVENTS.append("landings: " + ", ".join(f"{t:.3f}(v{d['vi']:.0f}, s{d['strength']:.2f}{', BIG' if d['big'] else ''})"
                                          for t, d in j_at("land")))
     EVENTS.append("island: " + ", ".join(f"{k} {t:.3f}" for k, t, _ in JEV if k in ("island", "arrive", "success", "shake", "spit", "rest")))
-# hết tiếng nhảy (lần chạm đất cuối), không lấn sang que diêm — dùng cho tự động hoá âm lượng nhạc
+# end of jump sounds (last landing), not overlapping the match — used for music volume automation
 JUMP_END = min(max([t for k, t, _ in JEV if k == "land"] or [0.0]), MATCH_AT - 0.8)
 
 
-# ═════════════════════════ 7. NHẠC: hook celesta ma quái-vui trên groove lo-fi/trap Halloween, Rê thứ 100 BPM ═════════════════════════
-# Tự tổng hợp hoàn toàn (không mẫu). Lưới nhịp neo vào nến bùng: nhịp 1 của ô 0 = CANDLE_AT (DROP). 100 BPM → ô 2.4 s →
-# dơi (DEMO.bats − nến ≈ 4.8 s) rơi đúng nhịp 1 ô 2, end card (≈ dơi + 6.0 s) rơi đúng phách 3 ô 4 (END_AT).
-# Vòng 4 ô: Dm – B♭ – Gm – A7 (i–VI–iv–V). Hook: 'Rê–Fa–La, Son♯-La' (nốt luyến Son♯ = ma quái mà vui), lặp 2 lần mỗi vòng.
-#   ô −8 (sau tia sét): hook hộp nhạc một mình, lọc tối như đài cũ · −7 (khắc): + kick mềm + bass ấm · −6…−2: + snap 2&4,
-#   hi-hat swing, pad lo-fi, lọc mở dần · −1 (que diêm, A7): bỏ kick, snap dồn 8 → 16, riser → CẮT GỌN đúng tiếng công
-#   tắc (LIT_AT) · 0.39 s nín thở (chỉ một hơi ngược rất nhỏ) · DROP ô 0 = nến bùng: boom 808 + kick + clap + crash + pad,
-#   hook đầy (bè quãng tám dưới), 808 lượn, hat trap có roll · ô 2–3 (dơi): thêm bè chuông quãng tám trên · ô 4: fill 2
-#   phách → END_AT: hit kết Rê trưởng (808 + celesta rải + pad) ngân ~2.5 s rồi tắt gọn.
+# ═════════════════════════ 7. MUSIC: spooky-fun celesta hook over a lo-fi/trap Halloween groove, D minor 100 BPM ═════════════════════════
+# Fully synthesised (no samples). The beat grid is anchored to the candle flare: beat 1 of bar 0 = CANDLE_AT (DROP). 100 BPM → 2.4 s bars →
+# bats (DEMO.bats − candle ≈ 4.8 s) land exactly on beat 1 of bar 2, end card (≈ bats + 6.0 s) lands exactly on beat 3 of bar 4 (END_AT).
+# 4-bar loop: Dm – B♭ – Gm – A7 (i–VI–iv–V). Hook: 'D–F–A, G♯–A' (the G♯ grace note = spooky but fun), played twice per loop.
+#   bar −8 (after the lightning): music-box hook alone, filtered dark like an old radio · −7 (carving): + soft kick + warm bass · −6…−2: + snap on 2&4,
+#   swung hi-hat, lo-fi pad, filter opening up · −1 (match, A7): drop the kick, snaps build 8 → 16, riser → HARD CUT exactly on the
+#   switch (LIT_AT) · 0.39 s held breath (only a tiny reversed breath) · DROP bar 0 = candle flare: 808 boom + kick + clap + crash + pad,
+#   full hook (octave-down harmony), gliding 808, trap hats with rolls · bars 2–3 (bats): add an octave-up bell harmony · bar 4: 2-beat
+#   fill → END_AT: final D major hit (808 + arpeggiated celesta + pad) rings ~2.5 s then cuts clean.
 mrng = np.random.default_rng(1313)
 db = lambda x: 10 ** (x / 20)
 BPM = 100.0
@@ -1341,7 +1341,7 @@ def mnoise(n, lo, hi):
 
 
 def tine(midi, sec=1.8, vel=1.0, bright=1.0):
-    """hộp nhạc/celesta: cơ bản + hài 2, 3 tắt nhanh + partial lệch (răng lược kim loại); 2 bè lệch ±3 cent → ấm"""
+    """music box/celesta: fundamental + fast-decaying harmonics 2, 3 + inharmonic partial (metal comb tine); 2 voices detuned ±3 cents → warm"""
     n = ns(sec)
     t = np.arange(n) / SR
     x = np.zeros(n)
@@ -1364,7 +1364,7 @@ def kick(sec=0.45, f0=150, f1=50, dec=8.0, click=0.12, drive=1.6):
 
 
 def b808(midi, sec, glide_to=None, drive=2.4, dec=1.1):
-    """808 ấm: sin có 'đấm' cao độ đầu nốt, bão hoà mềm (thêm hài để loa điện thoại vẫn nghe thấy), lượn cuối nốt"""
+    """warm 808: sine with a pitch 'punch' at note start, soft saturation (adds harmonics so phone speakers still hear it), glide at note end"""
     n = ns(sec)
     t = np.arange(n) / SR
     f = np.full(n, hz(midi)) * (1 + 0.5 * np.exp(-t / 0.015))
@@ -1412,10 +1412,10 @@ def mpad(midis, sec, att=0.25, rel=0.8):
 
 
 HOOK = {
-    0: [(0, 74), (0.5, 77), (1, 81), (1.75, 80), (2, 81), (3, 77), (3.5, 76)],             # Dm   Rê Fa La Son♯ La . Fa Mi
-    1: [(0, 74), (0.5, 77), (1, 82), (1.75, 81), (2, 79), (3, 77), (3.5, 74)],             # B♭   Rê Fa Si♭ La Son . Fa Rê
-    2: [(0, 74), (0.5, 77), (1, 81), (1.75, 80), (2, 81), (3, 84), (3.5, 82)],             # Gm   Rê Fa La Son♯ La . Đô Si♭
-    3: [(0, 81), (0.5, 79), (1, 77), (1.5, 76), (2, 73), (2.5, 76), (3, 79), (3.5, 76)],   # A7   La Son Fa Mi Đô♯ Mi Son Mi
+    0: [(0, 74), (0.5, 77), (1, 81), (1.75, 80), (2, 81), (3, 77), (3.5, 76)],             # Dm   D F A G♯ A . F E
+    1: [(0, 74), (0.5, 77), (1, 82), (1.75, 81), (2, 79), (3, 77), (3.5, 74)],             # B♭   D F B♭ A G . F D
+    2: [(0, 74), (0.5, 77), (1, 81), (1.75, 80), (2, 81), (3, 84), (3.5, 82)],             # Gm   D F A G♯ A . C B♭
+    3: [(0, 81), (0.5, 79), (1, 77), (1.5, 76), (2, 73), (2.5, 76), (3, 79), (3.5, 76)],   # A7   A G F E C♯ E G E
 }
 ROOTS = [50, 46, 43, 45]
 CHORD = {0: [50, 57, 62, 65], 1: [46, 53, 62, 65], 2: [43, 55, 62, 70], 3: [45, 52, 61, 67]}
@@ -1443,7 +1443,7 @@ for bar in range(FIRST_BAR, 4):
             if bar >= 2:
                 hook_hi.put(tine(m + 12, 1.1, v * 0.32, 0.5), t + 0.006, 1.0, 0.4 if beat % 1 else -0.4)
     if pre and bar < -1:
-        if bar >= FIRST_BAR + 1:                                     # kick mềm lo-fi + bass ấm
+        if bar >= FIRST_BAR + 1:                                     # soft lo-fi kick + warm bass
             for beat, g in ((0, 1.0), (2.5, 0.8)) + (((1.75, 0.45),) if bar >= -5 else ()):
                 hit_kick(at_(bar, beat), 0.55 * g, f0=120, f1=52, dec=10, click=0.05, drive=1.2)
             for beat, mm, ln in ((0, root - 12, 1.6), (2.5, root - 12, 0.8), (3.5, root - 5, 0.4)):
@@ -1454,7 +1454,7 @@ for bar in range(FIRST_BAR, 4):
             for k in range(8):
                 drums.put(hat(0.6 if k % 2 == 0 else 0.35), at_(bar, k / 2), 0.16, 0.3 if k % 2 else -0.3)
             pad_b.put(mpad(CHORD[q], BAR + 0.4, 0.5, 0.6), at_(bar, 0), 0.10, 0.0)
-    elif bar == -1:                                                  # que diêm: dồn nén, cắt gọn ở công tắc
+    elif bar == -1:                                                  # match: build-up, hard cut at the switch
         hit_kick(at_(bar, 0), 0.55, f0=120, f1=52, dec=10, click=0.05, drive=1.2)
         bass_b.put(b808(root - 12, LIT_AT - at_(bar, 0), drive=1.4, dec=0.8), at_(bar, 0), 0.32, 0.0)
         for k in range(14):
@@ -1490,16 +1490,16 @@ for bar in range(FIRST_BAR, 4):
             drums.put(hat(0.75 if bt % 1 == 0 else 0.5), at_(bar, bt) if bt % 0.5 == 0 else DROP + bar * BAR + bt * BEAT,
                       0.22, 0.3 if k % 2 else -0.3)
         pad_b.put(mpad(CHORD[q], BAR + 0.5, 0.06 if bar == 0 else 0.3, 0.5), at_(bar, 0), 0.22, 0.0)
-        if bar in (0, 2):                                            # crash nhỏ (dải ≤ 8.5 kHz, không chói)
+        if bar in (0, 2):                                            # small crash (band ≤ 8.5 kHz, not harsh)
             n = ns(1.6)
             tt = np.arange(n) / SR
             mfx.put(mnoise(n, 2500, 8500) * np.exp(-tt / 0.45) * np.minimum(tt / 0.002, 1), at_(bar, 0), 0.07, 0.0)
-# boom 808 + 'hơi ngược' rất nhỏ trong 0.39 s tối đen
+# 808 boom + a tiny 'reversed breath' during the 0.39 s blackout
 bass_b.put(b808(26, 1.6, drive=3.0, dec=1.6), DROP, 0.5, 0.0)
 sec = DROP - LIT_AT - 0.03
 rev = sum(tine(m, sec, 0.6) for m in (62, 65, 69))[::-1] * np.linspace(0, 1, ns(sec)) ** 2
 mfx.put(rev, DROP - sec - 0.005, 0.25, 0.0)
-# ô 4: fill 2 phách (hook kết câu + roll hat + 808 giữ) → hit kết Rê trưởng ở END_AT
+# bar 4: 2-beat fill (cadence hook + hat roll + held 808) → final D major hit at END_AT
 for beat, m in ((0, 74), (0.5, 77), (1, 81), (1.5, 80)):
     hook.put(tine(m, 1.2, 0.9), at_(4, beat), 1.0, 0.0)
     hook.put(tine(m - 12, 1.2, 0.45, 0.6), at_(4, beat) + 0.003, 1.0, 0.0)
@@ -1518,13 +1518,13 @@ n = ns(2.2)
 tt = np.arange(n) / SR
 mfx.put(mnoise(n, 2500, 8500) * np.exp(-tt / 0.5) * np.minimum(tt / 0.002, 1), END_AT, 0.07, 0.0)
 
-# hook trước drop: lọc tối (đài cũ) ô đầu, mở dần; ô −1 mở hết theo riser; drop: sáng hẳn
+# pre-drop hook: dark filter (old radio) in the first bar, opening gradually; bar −1 fully open with the riser; drop: fully bright
 h = hook.stereo()
 h_dark = np.stack([band(h[:, c], 150, 1700) for c in range(2)], 1)
 h_full = np.stack([band(h[:, c], 90, 8000) for c in range(2)], 1)
 op = ramp([(0, 0), (at_(FIRST_BAR + 1, 0), 0), (at_(-5, 0), 0.65), (at_(-1, 0), 0.65), (LIT_AT, 1.0), (DUR, 1.0)])[:, None]
 h = h_dark * (1 - op) * 1.25 + h_full * op
-# kick bơm pad + vang (sidechain kiểu trap) sau drop
+# kick pumps the pad + reverb (trap-style sidechain) after the drop
 pump = np.ones(N)
 for tk in kicks:
     if tk >= DROP - 0.01:
@@ -1535,7 +1535,7 @@ pads = pad_b.stereo() * pump[:, None]
 wet_src = h * 0.8 + hook_hi.stereo() + pads * 0.5 + drums.stereo() * 0.25
 music_abs = h + hook_hi.stereo() + pads + drums.stereo() + bass_b.stereo() + mfx.stereo()
 music_abs = music_abs + reverb(wet_src, 2.2, 6000, 11) * 0.42 * pump[:, None]
-# nín thở: cắt gọn mọi thứ (kể cả đuôi vang) đúng tiếng công tắc, trừ hơi ngược; sau END_AT tắt gọn trong ~3 s
+# held breath: hard-cut everything (including reverb tails) exactly at the switch, except the reversed breath; after END_AT cut clean within ~3 s
 gate = ramp([(0, 1), (LIT_AT - 0.012, 1), (LIT_AT + 0.004, 0), (DROP - 0.002, 0), (DROP, 1), (DUR, 1)])
 rev_part = np.zeros((N, 2))
 i0, i1 = ns(LIT_AT), ns(DROP)
@@ -1544,25 +1544,25 @@ music_abs = music_abs * gate[:, None] + rev_part
 music_abs *= np.clip((END_AT + 3.2 - t_all) / 1.0, 0, 1)[:, None]
 music_abs = np.stack([band(music_abs[:, c], 28, 9500) for c in range(2)], 1)
 _w = (ns(DROP + 0.3), ns(DROP + 2 * BAR))
-MUSIC_DROP_DB = -15.5                                                # mức nhạc lúc drop (dBFS RMS, trước master)
+MUSIC_DROP_DB = -15.5                                                # music level at the drop (dBFS RMS, pre-master)
 music_abs *= db(MUSIC_DROP_DB) / float(np.sqrt((music_abs[_w[0]:_w[1]] ** 2).mean()))
 EVENTS.append(f"music: {BPM:.0f} BPM, bar {BAR:.2f}s, first bar {FIRST_BAR} @ {at_(FIRST_BAR, 0):.3f}, cut {LIT_AT:.3f}, "
               f"DROP {DROP:.3f}, bats bar 2 @ {at_(2, 0):.3f} (bats {BATS_AT:.3f}), END hit {END_AT:.3f}")
 
 
-# ═════════════════════════ 8. TRỘN ═════════════════════════
+# ═════════════════════════ 8. MIX ═════════════════════════
 def rms(st):
     return float(np.sqrt((st ** 2).mean()))
 
 
-# chuẩn hoá từng stem rồi đặt mức tương đối (đỉnh cho tiếng động, RMS cho lớp nền)
+# normalise each stem then set relative levels (peak for effects, RMS for bed layers)
 stems = {
-    "carve": 0 * t_all[:, None],                                     # khắc: trộn sau, theo mức tuyệt đối (mục 8b)
+    "carve": 0 * t_all[:, None],                                     # carving: mixed later, at absolute level (section 8b)
     "match": norm_peak(match.stereo(), 0.6),
-    "fire": norm_peak(fire.stereo(), 1.0),                           # tiếng phừng là đỉnh lớn nhất clip
+    "fire": norm_peak(fire.stereo(), 1.0),                           # the whoomp is the loudest peak in the clip
     "candle": None,
     "air": norm_peak(air_bus.stereo(), 0.1),
-    "bats": 0 * t_all[:, None],                                      # dơi: trộn sau theo mức tuyệt đối (mục 5)
+    "bats": 0 * t_all[:, None],                                      # bats: mixed later at absolute level (section 5)
     "squeak": 0 * t_all[:, None],
     "intro": norm_peak(intro_bus.stereo(), 0.28) if INTRO else 0 * t_all[:, None],
     "look": norm_peak(look_bus.stereo(), 0.16) if LOOK else 0 * t_all[:, None],
@@ -1571,30 +1571,30 @@ stems = {
 }
 cs = candle.stereo()
 cs_roar = cs[int((CANDLE_AT + 1.5) * SR):]
-stems["candle"] = cs * (0.024 / rms(cs_roar))                        # lửa nến: lớp nền nhẹ dưới nhạc
+stems["candle"] = cs * (0.024 / rms(cs_roar))                        # candle flame: light bed under the music
 wind = wind_st * (0.016 / rms(wind_st))
-crickets = norm_peak(cricket_st, 0.05) * 0.0                         # giông: dế không kêu dưới mưa to → bỏ (giữ code cho v2)
+crickets = norm_peak(cricket_st, 0.05) * 0.0                         # storm: crickets don't chirp in heavy rain → dropped (code kept for v2)
 owl_n = norm_peak(owl_st, 0.035)
 hum_n = hum.stereo() * (0.0025 / max(rms(hum.stereo()[: int(9 * SR)]), 1e-9))
-# nền đêm hạ còn ~30% trong 0.39 s tối đen, nở lại theo nến; thấp hơn chút dưới đàn dơi
+# night bed drops to ~30% during the 0.39 s blackout, blooms back with the candle; a bit lower under the bat swarm
 amb_auto = ramp([(0, 1), (LIT_AT, 1), (LIT_AT + 0.08, 0.3), (CANDLE_AT, 0.3), (CANDLE_AT + 0.6, 1.0),
                  (BATS_AT, 1.0), (BATS_AT + 0.4, 0.7), (BATS_AT + 3.2, 1.0), (DUR, 1.0)])
 ambience = (wind + crickets + hum_n) * amb_auto[:, None] + owl_n
-music_n = 0 * t_all[:, None]                                         # nhạc: trộn ở mức tuyệt đối (mục 10)
-# lửa nến hạ chút dưới dơi
+music_n = 0 * t_all[:, None]                                         # music: mixed at absolute level (section 10)
+# candle flame a bit lower under the bats
 stems["candle"] *= ramp([(0, 1), (BATS_AT, 1), (BATS_AT + 0.5, 0.6), (BATS_AT + 3.4, 0.9), (DUR, 0.9)])[:, None]
 
 fx = sum(v for k, v in stems.items() if v is not None)
-fx = fx + reverb(fx, 1.2, 5000, 2) * 0.16                            # hiên nhà ngoài trời: vang ngắn, nhẹ
+fx = fx + reverb(fx, 1.2, 5000, 2) * 0.16                            # outdoor porch: short, light reverb
 owl_wet = reverb(owl_n, 2.2, 3000, 3) * 0.5
 mix = fx + music_n + ambience + owl_wet
 
-# bỏ DC + rền dưới 25 Hz, mềm dải > 11 kHz (không chói)
+# remove DC + rumble below 25 Hz, soften > 11 kHz (not harsh)
 mix = np.stack([band(mix[:, c], 25, 11000) for c in range(2)], 1)
-# kết: mờ dần 1.5 s cuối; vào: 20 ms
+# end: fade out over the last 1.5 s; in: 20 ms
 fade = np.minimum(np.minimum(t_all / 0.02, 1), np.clip((DUR - t_all) / 1.5, 0, 1) ** 1.5)
 mix *= fade[:, None]
-# giới hạn mềm phần trên 0.7 (chỉ đỉnh phừng/dơi chạm), rồi chuẩn đỉnh −1 dBFS
+# soft-limit above 0.7 (only the whoomp/bat peaks touch it), then peak-normalise to −1 dBFS
 th = 0.7
 a = np.abs(mix)
 over = a > th
@@ -1602,9 +1602,9 @@ mix[over] = np.sign(mix[over]) * (th + (1 - th) * np.tanh((a[over] - th) / (1 - 
 gain_master = 10 ** (-1 / 20) / np.abs(mix).max()
 mix *= gain_master
 
-# ═════════════════════════ 9. GIÔNG: mưa cả clip + sấm theo STRIKES (fx/storm.ts) ═════════════════════════
-# Trộn SAU khi đã chuẩn đỉnh phần còn lại (mọi thứ khác giữ nguyên mức), nên mức mưa/sấm ở đây là dBFS tuyệt đối.
-# Dùng rng riêng để không làm lệch chuỗi ngẫu nhiên của các phần trên.
+# ═════════════════════════ 9. STORM: rain over the whole clip + thunder per STRIKES (fx/storm.ts) ═════════════════════════
+# Mixed AFTER peak-normalising everything else (all other levels unchanged), so rain/thunder levels here are absolute dBFS.
+# Uses its own rng so the random sequence of the sections above isn't shifted.
 STORM_TS = os.path.join(ROOT, "app", "src", "fx", "storm.ts")
 STRIKES = []
 if os.path.exists(STORM_TS):
@@ -1622,7 +1622,7 @@ def snoise(n, lo, hi):
 
 
 def ticks(n, rate, f_lo, f_hi, dec, amp_shape=1.6):
-    """chuỗi tiếng giọt rơi: xung Poisson (biên độ phân bố mũ, vài giọt to) chập với vài nhân cộng hưởng tắt nhanh"""
+    """train of drip sounds: Poisson impulses (exponentially distributed amplitude, a few big drops) convolved with a few fast-decaying resonant kernels"""
     out = np.zeros(n)
     for f in np.geomspace(f_lo, f_hi, 5):
         imp = np.zeros(n)
@@ -1636,13 +1636,13 @@ def ticks(n, rate, f_lo, f_hi, dec, amp_shape=1.6):
     return out
 
 
-# ── mưa (làm lại, bản cuối): chỉ là KHÔNG KHÍ phía sau — êm, ấm, không xì trắng. ──
-#   rì rào: nhiễu nghiêng về trầm-trung (pink-ish), cắt dưới 120 Hz, lọc thông thấp ~5.5 kHz (dốc), hai kênh tương quan
-#     một phần (rộng nhưng cộng mono vẫn ổn); hạt mưa li ti = hạt nhiễu bao Hann 8–18 ms (tròn, không 'tách'), dải 300–2.5 kHz,
-#     rất dày và nhỏ nên hoà vào rì rào chứ không lách tách
-#   giọt trên mái hiên / ván gỗ: 'pộp' tròn mềm (sin tắt dần 180–650 Hz, tấn công cosin 3–5 ms, hơi trượt cao độ xuống),
-#     thưa, khoảng cách Poisson (không đều), cao độ/mức/pan ngẫu nhiên từng giọt
-#   mức nền ≈ −30 dBFS RMS; còn lùi thêm dưới nhạc và các tiếng chính (ducking ở phần trộn cuối, mục 10)
+# ── rain (redone, final version): just AMBIENCE in the back — smooth, warm, no white hiss. ──
+#   rush: noise tilted towards low-mid (pink-ish), cut below 120 Hz, steep low-pass ~5.5 kHz, two channels partially
+#     correlated (wide but still fine summed to mono); tiny raindrops = noise grains with 8–18 ms Hann envelopes (round, no 'ticks'), band 300–2.5 kHz,
+#     very dense and quiet so they blend into the rush instead of crackling
+#   drops on the porch roof / wooden boards: soft round 'plop' (decaying sine 180–650 Hz, 3–5 ms cosine attack, slight downward pitch glide),
+#     sparse, Poisson spacing (irregular), random pitch/level/pan per drop
+#   bed level ≈ −30 dBFS RMS; ducked further under the music and the main sounds (ducking in the final mix, section 10)
 def rain_grains(n, rate, lo, hi, d_lo, d_hi):
     out = np.zeros(n)
     k = np.flatnonzero(srng.random(n) < rate / SR)
@@ -1660,16 +1660,16 @@ def soft_drop(f0, dec):
     att = ns(srng.uniform(0.003, 0.005))
     e = np.exp(-tk / dec)
     e[:att] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(att) / att)
-    f = f0 * (1 - 0.12 * (1 - np.exp(-tk / 0.02)))                      # trĩu xuống chút: 'pộp' mềm
+    f = f0 * (1 - 0.12 * (1 - np.exp(-tk / 0.02)))                      # sags a little: soft 'plop'
     x = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.25 * np.sin(2 * np.pi * np.cumsum(f * 2.3) / SR) * np.exp(-tk / (dec * 0.4))
     return x * e
 
 
 RAIN_LO, RAIN_HI = 120, 5500
-inten = 0.88 + 0.24 * smooth_noise(DUR, 0.12)                         # mưa dày/thưa rất chậm
+inten = 0.88 + 0.24 * smooth_noise(DUR, 0.12)                         # rain thickens/thins very slowly
 shared = snoise(N, RAIN_LO, RAIN_HI)
 f_ = np.fft.rfftfreq(N, 1 / SR)
-tilt = 1 / np.sqrt(np.maximum(f_, 120) / 120) ** 0.9                  # nghiêng ~ −2.7 dB/oct: ấm, không sáng
+tilt = 1 / np.sqrt(np.maximum(f_, 120) / 120) ** 0.9                  # tilt ~ −2.7 dB/oct: warm, not bright
 rain = np.zeros((N, 2))
 for c in range(2):
     wash = np.fft.irfft(np.fft.rfft(0.6 * shared + 0.8 * snoise(N, RAIN_LO, RAIN_HI)) * tilt, N)
@@ -1677,11 +1677,11 @@ for c in range(2):
     patter = rain_grains(N, 900, 300, 2500, 0.008, 0.018)
     patter /= patter.std() + 1e-12
     rain[:, c] = (wash * 0.8 + patter * 0.22) * inten
-# giọt trên mái hiên / ván gỗ: thưa (≈ 5/s tổng), tròn, mềm, ngẫu nhiên
+# drops on the porch roof / wooden boards: sparse (≈ 5/s total), round, soft, random
 t = srng.exponential(1 / 5.0)
 n_drops = 0
 while t < DUR - 0.4:
-    big = srng.random() < 0.18                                       # giọt nặng từ mép mái: trầm hơn, to hơn chút
+    big = srng.random() < 0.18                                       # heavy drip from the roof edge: lower, a bit louder
     d = soft_drop(srng.uniform(180, 320) if big else srng.uniform(330, 650), srng.uniform(0.035, 0.06) if big else srng.uniform(0.015, 0.03))
     g = srng.lognormal(0, 0.35) * (1.6 if big else 0.8)
     pan = srng.uniform(-0.8, 0.8)
@@ -1691,25 +1691,25 @@ while t < DUR - 0.4:
     rain[i0:i0 + m, 1] += d[:m] * g * math.sqrt((1 + pan) / 2) * 1.414 * 0.35
     n_drops += 1
     t += srng.exponential(1 / 5.0) + 0.03
-rain = np.stack([band(rain[:, c], RAIN_LO, RAIN_HI, order=8) for c in range(2)], 1)   # dốc 48 dB/oct ngoài 120 Hz–5.5 kHz
+rain = np.stack([band(rain[:, c], RAIN_LO, RAIN_HI, order=8) for c in range(2)], 1)   # 48 dB/oct slopes outside 120 Hz–5.5 kHz
 RAIN_RMS_DB = -30.0
 rain *= db(RAIN_RMS_DB) / rms(rain)
-_c = db(-20)                                                         # không giọt nào nhô lên như tiếng động
+_c = db(-20)                                                         # no drop pokes out like a sound effect
 rain = _c * np.tanh(rain / _c)
 rain_auto = ramp([(0, 1), (LIT_AT, 1), (LIT_AT + 0.08, db(-4)), (CANDLE_AT, db(-4)), (CANDLE_AT + 0.4, 1), (DUR, 1)])
-rain *= rain_auto[:, None]                                           # (duck theo nhạc + tiếng chính: mục 10)
+rain *= rain_auto[:, None]                                           # (ducked under music + main sounds: section 10)
 EVENTS.append(f"rain: {n_drops} soft drops, band {RAIN_LO}–{RAIN_HI} Hz")
 
 
-# ── sấm: (gần) tiếng xé/rắc sắc rồi ầm ì cuộn dài; (xa) mềm, mất dải cao, cuộn lâu hơn ──
+# ── thunder: (near) sharp tearing crack then long rolling rumble; (far) soft, highs lost, rolls longer ──
 def thunder(dist):
     near = dist < 900
     sec = (7.0 if near else 9.0)
     n = ns(sec)
     t = np.arange(n) / SR
-    hi_cut = 9000 * math.exp(-dist / 900)                             # không khí nuốt dải cao theo khoảng cách
+    hi_cut = 9000 * math.exp(-dist / 900)                             # air absorbs highs with distance
     out = np.zeros((n, 2))
-    # cuộn: các đợt phồng lên bất thường (tâm/độ rộng ngẫu nhiên), tắt dần
+    # roll: irregular swells (random centre/width), decaying
     bumps = np.zeros(n)
     tc = 0.15 if near else 0.5
     while tc < sec * 0.8:
@@ -1719,7 +1719,7 @@ def thunder(dist):
     onset = np.minimum(t / (0.06 if near else 0.45), 1)
     roll = (0.25 * np.exp(-t / (2.5 if near else 3.5)) + bumps) * onset * np.clip((sec - t) / 1.2, 0, 1)
     for c in range(2):
-        tex = 0.55 + 0.45 * smooth_noise(sec, 7)                     # lục cục khi cuộn
+        tex = 0.55 + 0.45 * smooth_noise(sec, 7)                     # rumbly texture while rolling
         sub = snoise(n, 28, 80)
         low = snoise(n, 60, 240)
         mid = snoise(n, 200, min(900, hi_cut))
@@ -1727,7 +1727,7 @@ def thunder(dist):
     rumble = out / np.abs(out).max()
     crack = np.zeros((n, 2))
     if near:
-        # xé trời: chuỗi xung dày dần rồi thưa trong ~0.4 s, nổ băng rộng ngay đầu, + 'đùng' thân
+        # sky tear: impulse train thickening then thinning over ~0.4 s, broadband blast at the start, + body 'boom'
         tk = 0.0
         while tk < 0.45:
             m = ns(0.012)
@@ -1746,10 +1746,10 @@ def thunder(dist):
 
 
 
-# ── (v3b) INTRO mở màn 0–3 s: hằng số đọc từ `export const INTRO` trong script.ts ──
-#   sấm xa ì ầm dưới mưa → sét GẦN ở flash[0] (rắc xé + rắc nhỏ ở flash[2] + ầm ì 3–4 s, tắt ≥12 dB trước 3.0 s)
-#   → cẩu máy xuống: gió lướt đỉnh ở giữa chặng (tốc độ smooth3 lớn nhất), quét L→R → đèn hiên chập chờn 'tạch-rè'
-#   → gió giật + lá phong khô lăn lạo xạo trên ván → bí lắc nhẹ, ván gỗ kêu 'kẹt' khẽ khi camera dừng
+# ── (v3b) INTRO opening 0–3 s: constants read from `export const INTRO` in script.ts ──
+#   distant thunder rumbling under the rain → NEAR lightning at flash[0] (tearing crack + small crack at flash[2] + 3–4 s rumble, down ≥12 dB before 3.0 s)
+#   → crane down: wind rush peaks mid-move (max smooth3 speed), sweeping L→R → porch light flickers 'click-bzzt'
+#   → wind gust + dry maple leaves tumbling across the boards → pumpkin rocks slightly, boards give a faint 'creak' as the camera stops
 irng = np.random.default_rng(909)
 intro_abs = np.zeros((N, 2))
 INTRO2 = None
@@ -1763,7 +1763,7 @@ if _m:
 
 
 def add_abs(sig, at, gain=1.0, pan=0.0):
-    """cộng tín hiệu (mono hoặc stereo) vào intro_abs theo dBFS tuyệt đối; cho phép bắt đầu trước 0 (bị cắt)"""
+    """add a signal (mono or stereo) into intro_abs at absolute dBFS; may start before 0 (gets trimmed)"""
     if sig.ndim == 1:
         sig = np.stack([sig * math.sqrt(1 - pan), sig * math.sqrt(1 + pan)], 1)
     i0 = ns(at)
@@ -1782,7 +1782,7 @@ def inoise(n, lo, hi):
 if INTRO2:
     I2 = INTRO2
     f0_, f2_ = I2["flash"][0], I2["flash"][2]
-    # 1) sấm xa đang cuộn từ trước khi clip bắt đầu: rất trầm, mất dải cao, nhỏ dưới mưa
+    # 1) distant thunder already rolling before the clip starts: very low, no highs, quiet under the rain
     sec = 2.6
     n = ns(sec)
     t_ = np.arange(n) / SR
@@ -1793,7 +1793,7 @@ if INTRO2:
     roll *= np.clip((sec - t_) / 1.0, 0, 1)[:, None]
     roll = np.stack([band(roll[:, c], 25, 300) for c in range(2)], 1)
     add_abs(roll / np.abs(roll).max(), -0.8, db(-24))
-    # 2) sét GẦN (không trễ): rắc xé sắc + 'đùng' thân, rắc nhỏ thứ hai, rồi ầm ì cuộn 3–4 s tắt nhanh
+    # 2) NEAR lightning (no delay): sharp tearing crack + body 'boom', a second small crack, then a 3–4 s rolling rumble that dies fast
     def close_crack(n_sec, hi):
         m_all = ns(n_sec)
         cr = np.zeros((m_all, 2))
@@ -1828,22 +1828,22 @@ if INTRO2:
     rum = rum + reverb(rum, 2.5, 2500, 8) * 0.3
     rum *= np.clip((sec - t_) / 0.6, 0, 1)[:, None]
     add_abs(rum / np.abs(rum).max(), f0_ + 0.03, db(-13), -0.15)
-    # 3) cẩu máy: gió lướt theo tốc độ camera (đạo hàm smooth3 trên chặng crane), quét L→R
+    # 3) crane move: wind rush follows camera speed (smooth3 derivative over the crane leg), sweeping L→R
     c0, c1 = I2["crane"]
     sec = c1 - c0 + 0.3
     n = ns(sec)
     t_ = np.arange(n) / SR
     u = np.clip(t_ / (c1 - c0), 0, 1)
-    v = np.where(u < 0.5, 12 * u ** 2, 12 * (1 - u) ** 2) / 3                  # 0..1, đỉnh giữa chặng
+    v = np.where(u < 0.5, 12 * u ** 2, 12 * (1 - u) ** 2) / 3                  # 0..1, peaks mid-leg
     air = (inoise(n, 220, 900) * (1 - 0.5 * v) + inoise(n, 600, 2600) * v * 0.8 + inoise(n, 1500, 4500) * v ** 2 * 0.25)
     air *= v ** 1.2 * (0.85 + 0.15 * smooth_noise(sec, 3))
     air = fades(air, 0.05, 0.1)
     pan_sw = np.interp(u, [0, 1], [-0.55, 0.55])
     k_pk = int(np.argmax(v))
     w2 = ns(0.25)
-    air *= db(-23) / np.sqrt((air[max(0, k_pk - w2):k_pk + w2] ** 2).mean())   # cửa sổ 0.5 s quanh đỉnh ≈ −23 dBFS RMS
+    air *= db(-23) / np.sqrt((air[max(0, k_pk - w2):k_pk + w2] ** 2).mean())   # 0.5 s window around the peak ≈ −23 dBFS RMS
     add_abs(np.stack([air * np.sqrt((1 - pan_sw) / 2) * 1.414, air * np.sqrt((1 + pan_sw) / 2) * 1.414], 1), c0)
-    # 4) đèn hiên chập chờn: 'tạch' rơ-le + rè điện 120 Hz ngắn mỗi lần tắt; 'tích' nhỏ hơn khi sáng lại
+    # 4) porch light flicker: relay 'click' + short 120 Hz electrical buzz on each off; smaller 'tick' when it comes back on
     lamp_pan = 0.3
     fl = I2["flicker"]
     for a_, b_ in zip(fl[0::2], fl[1::2]):
@@ -1860,7 +1860,7 @@ if INTRO2:
         m = ns(0.01)
         tick = fades(inoise(m, 1500, 4000) * np.exp(-np.arange(m) / (0.0006 * SR)), 0.0002, 0.003)
         add_abs(tick / np.abs(tick).max(), b_, db(-32), lamp_pan)
-    # 5) gió giật + lá phong khô lăn lạo xạo trên ván hiên (0.8 s), lá lăn từ trái qua phải
+    # 5) wind gust + dry maple leaves tumbling across the porch boards (0.8 s), rolling left to right
     g0 = I2["gust"]
     sec = 1.0
     n = ns(sec)
@@ -1871,8 +1871,8 @@ if INTRO2:
     tk = 0.05
     while tk < 0.8:
         k = ns(tk)
-        p = -0.6 + 1.2 * tk / 0.8 + irng.uniform(-0.2, 0.2)                     # lá trôi theo gió
-        for j in range(irng.integers(3, 8)):                                    # một cú lăn = vài cái 'sột' liền
+        p = -0.6 + 1.2 * tk / 0.8 + irng.uniform(-0.2, 0.2)                     # leaves drift with the wind
+        for j in range(irng.integers(3, 8)):                                    # one tumble = a few quick 'scritches'
             m = ns(irng.uniform(0.004, 0.01))
             kk = k + ns(j * irng.uniform(0.014, 0.03))
             if kk + m >= n:
@@ -1886,7 +1886,7 @@ if INTRO2:
     k_pk = int(np.argmax(ge))
     gst *= db(-26) / np.sqrt((gst[max(0, k_pk - w2):k_pk + w2] ** 2).mean())
     add_abs(fades(gst[:, 0], 0.02, 0.05)[:, None] * [1, 0] + fades(gst[:, 1], 0.02, 0.05)[:, None] * [0, 1], g0 - 0.1)
-    # 6) camera dừng, bí khẽ lắc: tiếng 'kẹt' gỗ nhỏ (dính–trượt ~70 Hz qua cộng hưởng ván)
+    # 6) camera stops, pumpkin rocks gently: small wooden 'creak' (~70 Hz stick–slip through board resonance)
     st_ = I2["settle"] + 0.1
     sec = 0.28
     n = ns(sec)
@@ -1910,32 +1910,32 @@ for s in STRIKES:
         continue
     rumble, crack = thunder(s["dist"])
     near = s["dist"] < 900
-    # pan: phương vị cú sét so với hướng camera đang nhìn lúc tiếng tới (sấm vốn lan toả → pan nhẹ)
+    # pan: azimuth of the strike relative to where the camera looks when the sound arrives (thunder is diffuse → light pan)
     bx, by, bz, _ = view_at(arr, LIT_AT if arr >= LIT_AT else -1.0)
     az_cam = math.atan2(-bz[0], -bz[1])
     pan = float(np.clip(0.45 * math.sin(s["az"] - az_cam), -0.5, 0.5))
-    pk_crack, pk_roll = (db(-10), db(-10)) if near else (0.0, db(-16))   # ấm: thân ầm ì trội hơn tiếng xé
+    pk_crack, pk_roll = (db(-10), db(-10)) if near else (0.0, db(-16))   # warm: the rumble body dominates the crack
     sig = rumble * pk_roll + crack * pk_crack
-    sig = sig + reverb(sig, 3.0, 2500 if near else 1200, 5) * 0.35  # vọng giữa trời / nhà cửa
+    sig = sig + reverb(sig, 3.0, 2500 if near else 1200, 5) * 0.35  # echoes off the sky / houses
     sig[:, 0] *= math.sqrt(1 - pan)
     sig[:, 1] *= math.sqrt(1 + pan)
     i0 = ns(arr)
     m = min(len(sig), N - i0)
     storm[i0:i0 + m] += sig[:m]
     THUNDER.append((s, arr, pan))
-storm = np.stack([band(storm[:, c], 28, 6500) for c in range(2)], 1)   # sấm sâu, ấm: bỏ dải chói
+storm = np.stack([band(storm[:, c], 28, 6500) for c in range(2)], 1)   # deep, warm thunder: drop the harsh band
 
-# ── khắc (mức tuyệt đối): tiếng cắt ≈ −24 dBFS RMS trong lúc dao đi, 'thóc' lỗ ~−14 dBFS đỉnh, vụn lộp độp rất nhỏ ──
+# ── carving (absolute level): cutting ≈ −24 dBFS RMS while the knife moves, hole 'thock' ~−14 dBFS peak, very quiet pattering bits ──
 cut = carve_cut.stereo()
 cut_mask = np.zeros(N, bool)
 for a_, b_ in CUT_WIN:
     cut_mask[ns(a_):ns(b_)] = True
 cut *= db(-24) / np.sqrt((cut[cut_mask] ** 2).mean())
 carve_abs = cut + norm_peak(carve_pop.stereo(), db(-14)) + norm_peak(carve_patter.stereo(), db(-26))
-carve_abs = carve_abs + reverb(carve_abs, 0.8, 3500, 6) * 0.12        # vang ngắn của hiên
-# ═════════════════════════ 10. DUCK + DE-ESS (trộn cuối) ═════════════════════════
-# nhạc lùi dưới các tiếng chính (sét, sấm, khắc, que diêm, nến bùng, dơi sượt); mưa lùi dưới nhạc + tiếng chính.
-# Bộ dò bao: RMS khối 5 ms → một cực tấn công/nhả; độ lùi tăng tuyến tính trong 12 dB trên ngưỡng tới 'depth'.
+carve_abs = carve_abs + reverb(carve_abs, 0.8, 3500, 6) * 0.12        # short porch reverb
+# ═════════════════════════ 10. DUCK + DE-ESS (final mix) ═════════════════════════
+# music ducks under the main sounds (lightning, thunder, carving, match, candle flare, bat skims); rain ducks under music + main sounds.
+# Envelope detector: 5 ms block RMS → one-pole attack/release; reduction grows linearly over 12 dB above threshold up to 'depth'.
 def key_env(x, att=0.004, rel=0.25):
     m = np.abs(x).max(1) if x.ndim == 2 else np.abs(x)
     B = ns(0.005)
@@ -1956,7 +1956,7 @@ def duck_db(x, thr, depth, rng_db=12.0, att=0.004, rel=0.25):
 
 
 def deess(st, lo=4500, hi=9500, thr_db=-40.0, ratio=3.0):
-    """de-esser băng tách (FFT pha 0 nên trừ ra cộng vào không lệch pha): chỉ nén dải 4.5–9.5 kHz khi nó vọt lên"""
+    """split-band de-esser (zero-phase FFT so subtracting/adding back has no phase shift): only compresses 4.5–9.5 kHz when it spikes"""
     out = st.copy()
     for c in range(2):
         hb = band(st[:, c], lo, hi)
@@ -1966,18 +1966,18 @@ def deess(st, lo=4500, hi=9500, thr_db=-40.0, ratio=3.0):
     return out
 
 
-# tiếng khắc/cưa: thông thấp 9 kHz + de-ess
+# carving/sawing: 9 kHz low-pass + de-ess
 carve_abs = deess(np.stack([band(carve_abs[:, c], 40, 9000, order=6) for c in range(2)], 1))
 match_k, fire_k = stems["match"] * gain_master, stems["fire"] * gain_master
 jump_k = stems["jump"] * gain_master
 keys_music = np.max([
-    duck_db(intro_abs, -34, 8.0, rel=0.35),                          # sét mở màn + cẩu máy
-    duck_db(storm, -36, 6.0, rel=0.45),                              # sấm
-    duck_db(carve_abs, -36, 4.0, rel=0.2),                           # khắc
-    duck_db(match_k, -34, 5.0, rel=0.25),                            # que diêm
-    duck_db(fire_k, -28, 3.0, rel=0.15),                             # công tắc + nến bùng (nhẹ, để drop vẫn đấm)
-    duck_db(bats_abs, -30, 3.0, rel=0.25),                           # dơi sượt ống kính
-    duck_db(jump_k, -30, 3.0, rel=0.2),                              # bí nhảy / đảo
+    duck_db(intro_abs, -34, 8.0, rel=0.35),                          # opening lightning + crane move
+    duck_db(storm, -36, 6.0, rel=0.45),                              # thunder
+    duck_db(carve_abs, -36, 4.0, rel=0.2),                           # carving
+    duck_db(match_k, -34, 5.0, rel=0.25),                            # match
+    duck_db(fire_k, -28, 3.0, rel=0.15),                             # switch + candle flare (light, so the drop still punches)
+    duck_db(bats_abs, -30, 3.0, rel=0.25),                           # bats skimming the lens
+    duck_db(jump_k, -30, 3.0, rel=0.2),                              # pumpkin jump / island
 ], axis=0)
 music_abs *= db(-keys_music)[:, None]
 rain_duck = np.maximum(duck_db(music_abs, -34, 5.0, 14, 0.05, 0.6), np.minimum(keys_music * 1.2, 7.0))
@@ -1991,7 +1991,7 @@ if _sd:
     np.save(os.path.join(_sd, "music.npy"), music_abs.astype(np.float32))
 
 mix = mix + (rain + storm + carve_abs + intro_abs + bats_abs + music_abs) * fade[:, None]
-# giới hạn đỉnh nhìn trước 5 ms (không méo): giữ ≤ −1 dBFS
+# 5 ms look-ahead peak limiter (no distortion): keep ≤ −1 dBFS
 CEIL = db(-1)
 peak_abs = np.abs(mix).max(1)
 g = np.minimum(1, CEIL / np.maximum(peak_abs, 1e-9))
@@ -2020,7 +2020,7 @@ EVENTS.append(f"carve: cutting RMS {20 * np.log10(np.sqrt((_c[cut_mask] ** 2).me
 EVENTS.append(f"rain: RMS {20 * np.log10(rms(rain)):.1f} dBFS (target {RAIN_RMS_DB}), peak {20 * np.log10(np.abs(rain).max()):.1f}; limiter min gain "
               f"{20 * np.log10(gs.min() + 1e-9):.1f} dB")
 
-if os.environ.get("SYNTH_DEBUG"):                                    # in mức RMS (dBFS) từng stem theo cửa sổ 0.5 s
+if os.environ.get("SYNTH_DEBUG"):                                    # print per-stem RMS levels (dBFS) in 0.5 s windows
     dbg = dict(stems, music=music_abs / gain_master, amb=ambience + owl_n)
     dbg.update(rain=rain / gain_master, storm=storm / gain_master, carve=carve_abs / gain_master, intro2=intro_abs / gain_master, bats=bats_abs / gain_master)
     print("t     " + " ".join(f"{k:>7}" for k in dbg))
@@ -2028,10 +2028,10 @@ if os.environ.get("SYNTH_DEBUG"):                                    # in mức 
         row = [20 * np.log10(np.sqrt((v[i:i + SR // 2] ** 2).mean()) * gain_master + 1e-9) for v in dbg.values()]
         print(f"{i / SR:5.1f} " + " ".join(f"{r:7.1f}" for r in row))
 
-# ═════════════════════════ 11. MASTER cho X: −14 LUFS tích hợp, true peak ≤ −1 dBTP, 48 kHz stereo 24-bit ═════════════════════════
-# (a) đo loudness bản trộn (ffmpeg loudnorm lượt 1) → (b) đưa gain về đích + limiter nhìn trước đỉnh oversample ×4 (trần
-# −1.6 dBTP) để lượt 2 chạy được chế độ TUYẾN TÍNH (không nén động) → (c) loudnorm 2 lượt (linear=true) → (d) đo lại
-# (ebur128 peak=true) + ảnh phổ. Bản trộn thô giữ ở <out>_premaster.wav.
+# ═════════════════════════ 11. MASTER for X: −14 LUFS integrated, true peak ≤ −1 dBTP, 48 kHz stereo 24-bit ═════════════════════════
+# (a) measure mix loudness (ffmpeg loudnorm pass 1) → (b) gain to target + look-ahead limiter on ×4 oversampled peaks (ceiling
+# −1.6 dBTP) so pass 2 can run in LINEAR mode (no dynamic compression) → (c) 2-pass loudnorm (linear=true) → (d) re-measure
+# (ebur128 peak=true) + spectrogram. The raw mix is kept at <out>_premaster.wav.
 import shutil, subprocess
 FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 LUFS, TP = -14.0, -1.0
@@ -2047,7 +2047,7 @@ def write_wav24(path, x):
 
 
 def os_peaks(x, k=4):
-    """đỉnh từng mẫu sau oversample ×k (FFT) — ước lượng true peak"""
+    """per-sample peak after ×k oversampling (FFT) — true peak estimate"""
     p = np.zeros(len(x))
     for c in range(2):
         y = np.fft.irfft(np.fft.rfft(x[:, c]), k * len(x)) * k

@@ -1,13 +1,13 @@
 /**
- * Giông: thời điểm sét đánh, độ sáng loé (nhiều nhịp như sét thật) và hình tia sét trên nền trời.
- * Toạ độ tia sét: (phương vị, cao độ) theo rad trong hệ thế giới — az = atan2(x, y), el = asin(z) của hướng nhìn.
- * synth_audio.py đọc STRIKES để đặt tiếng sấm (trễ theo khoảng cách `dist` (m), tốc độ âm 343 m/s).
+ * Thunderstorm: strike times, flash brightness (multiple pulses like real lightning) and the bolt shape against the sky.
+ * Bolt coordinates: (azimuth, elevation) in rad in world space — az = atan2(x, y), el = asin(z) of the view direction.
+ * synth_audio.py reads STRIKES to place the thunder (delayed by distance `dist` (m), speed of sound 343 m/s).
  */
 export const STRIKES = [
-  { t: 9.95, az: -0.55, el: 0.62, dist: 700 }, // demo: đang nhìn sang trái (sân, trời)
-  { t: 22.35, az: -0.24, el: 0.46, dist: 1100 }, // demo: lúc nghiêng máy, trước khi dơi ra
+  { t: 9.95, az: -0.55, el: 0.62, dist: 700 }, // demo: looking left (yard, sky)
+  { t: 22.35, az: -0.24, el: 0.46, dist: 1100 }, // demo: while tilting the phone, before the bats come out
 ];
-/** Tia sét: kênh chính BOLT_MAIN điểm + BOLT_BR nhánh × BOLT_BRN điểm; 2 phần tử đầu là khung bao (az, el) min / max. */
+/** Bolt: main channel of BOLT_MAIN points + BOLT_BR branches × BOLT_BRN points; the first 2 elements are the (az, el) min / max bounding box. */
 export const BOLT_MAIN = 33;
 export const BOLT_BR = 3;
 export const BOLT_BRN = 9;
@@ -19,7 +19,7 @@ const hash = (n: number) => {
   return s - Math.floor(s);
 };
 
-/** Độ sáng loé của một cú sét theo thời gian kể từ lúc đánh (s): 3 nhịp chớp rồi tắt dần. */
+/** Flash brightness of one strike over time since it hit (s): 3 pulses then fades out. */
 export const flashCurve = (u: number) => {
   "worklet";
   if (u < 0 || u > 1.2) return 0;
@@ -27,7 +27,7 @@ export const flashCurve = (u: number) => {
   return Math.min(1, pulse(0.02, 0.025, 1) + pulse(0.13, 0.03, 0.75) + pulse(0.3, 0.05, 0.45) + 0.15 * Math.exp(-u / 0.35));
 };
 
-/** Cú sét đang hiện (demo: theo STRIKES; tương tác: 15–28 s một lần, vị trí ngẫu nhiên trên nền trời bên trái). */
+/** Currently visible strike (demo: per STRIKES; interactive: every 15–28 s, random position on the left side of the sky). */
 export const currentStrike = (t: number, demo: boolean) => {
   "worklet";
   if (demo) {
@@ -48,9 +48,9 @@ export const currentStrike = (t: number, demo: boolean) => {
 };
 
 /**
- * Đường tia sét trong (phương vị, cao độ), mỗi điểm [az, el, w] với w = độ sáng đoạn từ điểm này tới điểm sau (0 = ngắt nét).
- * Kênh chính từ mây xuống chân trời dựng bằng midpoint displacement (gấp khúc fractal: khúc lớn gãy mạnh, khúc nhỏ lăn tăn như
- * sét thật), 3 nhánh phụ tách ra ở nửa trên, chĩa xuống chéo ra ngoài, mờ dần về đầu nhánh. 2 phần tử đầu: khung bao.
+ * Bolt path in (azimuth, elevation), each point [az, el, w] with w = brightness of the segment from this point to the next (0 = break).
+ * The main channel from cloud to horizon is built with midpoint displacement (fractal zigzag: big segments bend hard, small ones jitter like
+ * real lightning), 3 side branches split off in the upper half, pointing down and outward, fading toward their tips. First 2 elements: bounding box.
  */
 export const boltPoints = (az: number, el: number, seed: number) => {
   "worklet";
@@ -76,10 +76,10 @@ export const boltPoints = (az: number, el: number, seed: number) => {
   const [mx, my] = fractal(BOLT_MAIN, az, el, endAz, -0.004, 0.62, seed);
   for (let i = 0; i < BOLT_MAIN; i++) out.push([mx[i], my[i], i < BOLT_MAIN - 1 ? 1 : 0]);
   for (let b = 0; b < BOLT_BR; b++) {
-    const at = 4 + Math.floor(hash(seed * 5.7 + b * 11.3) * 14);       // tách ở nửa trên kênh chính
+    const at = 4 + Math.floor(hash(seed * 5.7 + b * 11.3) * 14);       // splits in the upper half of the main channel
     const side = (b % 2 === 0 ? 1 : -1) * (hash(seed + b * 2.9) < 0.75 ? 1 : -1);
     const L = 0.09 + hash(seed * 2.3 + b) * 0.1;
-    const ang = 0.5 + hash(seed * 7.1 + b * 3.3) * 0.5;                   // lệch khỏi phương thẳng đứng (rad)
+    const ang = 0.5 + hash(seed * 7.1 + b * 3.3) * 0.5;                   // deviation from vertical (rad)
     const ex = mx[at] + side * Math.sin(ang) * L, ey = Math.max(0.005, my[at] - Math.cos(ang) * L);
     const [bx, by] = fractal(BOLT_BRN, mx[at], my[at], ex, ey, 0.7, seed * 17 + b);
     for (let i = 0; i < BOLT_BRN; i++) out.push([bx[i], by[i], i < BOLT_BRN - 1 ? 0.7 * (1 - i / (BOLT_BRN - 1)) + 0.15 : 0]);

@@ -1,273 +1,273 @@
-# LIGHT: ghi chú của agent ánh sáng
+# LIGHT: lighting agent notes
 
-Sim riêng: "Pumpkin Light 17 Pro Max" (57B21943-917B-4B2F-9DD3-21B422828EAF), Metro 8097, chạy từ bản sao sandbox trong scratchpad.
-File LIGHT giữ: `app/src/shaders/candleLight.ts` (nhận từ ATMOS lúc 17:20), `faceShadow.ts`, `lightningThrough.ts`, `notes/light*`.
+Own sim: "Pumpkin Light 17 Pro Max" (57B21943-917B-4B2F-9DD3-21B422828EAF), Metro 8097, running from a sandbox copy in the scratchpad.
+Files owned by LIGHT: `app/src/shaders/candleLight.ts` (taken over from ATMOS at 17:20), `faceShadow.ts`, `lightningThrough.ts`, `notes/light*`.
 
-## MỚI NHẤT (00:28): vành vỏ rời / thân tàng hình khi bí bay (pumpkin-rim-cut). Sửa thẳng trong app thật
+## LATEST (00:28): detached rind rim / invisible body while the pumpkin is airborne (pumpkin-rim-cut). Fixed directly in the real app
 
-- **Nguyên nhân:** lúc bay, tia nhìn được bắn từ một "mắt lệch" `eye − jW`.
-  - Bí bay cao nên nhìn thấy đáy quả bí, mà ảnh vỏ Blender bị sàn cắt phẳng ở đáy (trong suốt).
-  - Kết quả: một dải thân tàng hình, phần vỏ ngoài mép hiện thành vành rời khi bí xoay hoặc lộn.
-- **Đã sửa:**
-  - `viewSksl.ts`: thêm `restScreen()` và `pumpkinRay()`. Bỏ phần xoay / nén / thu nhỏ trên màn hình, dời điểm về chỗ bí đứng yên, rồi bắn tia từ mắt thật. Bí bay như một khối cứng và trông y như lúc đứng yên, đủ cuống, viền mềm.
-  - `pumpkin.ts`: dùng `eye` cho hướng nhìn và ngọn lửa; bỏ mẹo `keep` (mẹo này còn làm mất cuống khi bay).
-  - `lightningThrough.ts`: dùng cùng tia `pumpkinRay`.
-  - Lúc đứng yên không đổi gì.
-- `rain.ts` (của ATMOS) còn dùng `eye − jW` để mưa bị quả bí che: lệch nhẹ lúc bay, không thấy rõ.
-- Đã kiểm bằng ảnh chụp sim lúc bí lộn 90° khi rơi và lúc nghiêng khi nhảy: `notes/light/v9-flying-rim-after.jpg`.
+- **Cause:** while airborne, view rays were cast from an "offset eye" `eye − jW`.
+  - The pumpkin flies high, so the view sees its underside, but the Blender rind image is cut flat by the floor at the bottom (transparent).
+  - Result: an invisible band of body, and the outer rind shows up as a detached rim when the pumpkin rotates or flips.
+- **Fixed:**
+  - `viewSksl.ts`: add `restScreen()` and `pumpkinRay()`. Undo the on-screen rotation / squash / shrink, move the point back to where the pumpkin rests, then cast the ray from the real eye. The pumpkin flies as a rigid body and looks exactly like at rest, stem intact, soft edge.
+  - `pumpkin.ts`: use `eye` for the view direction and the flame; drop the `keep` trick (it also made the stem disappear in flight).
+  - `lightningThrough.ts`: uses the same `pumpkinRay` ray.
+  - Nothing changes at rest.
+- `rain.ts` (ATMOS's) still uses `eye − jW` so the rain is occluded by the pumpkin: slightly off in flight, not noticeable.
+- Checked with sim screenshots while the pumpkin flips 90° on the fall and while tilting on the jump: `notes/light/v9-flying-rim-after.jpg`.
 
-## 00:02: bỏ viền sáng màu be ở giữa đáy bí (v7 screen-60, giây 8). ĐÃ CHÉP vào app thật
+## 00:02: removed the beige bright rim in the middle of the pumpkin's bottom (v7 screen-60, second 8). COPIED into the real app
 
-- **Nguyên nhân:** bản v6 bỏ hẳn bóng trên phần sàn bị chân bí che, nên phần gỗ sáng đó lộ ra qua mép đáy hơi trong suốt của vỏ.
-- **Đã sửa:** phần sàn đó giờ tối đều (0,14), bằng mức tối của bóng tiếp xúc ở mép chân. Đáy bí tối dần vào bóng tiếp xúc, không viền sáng, không dải cắt.
-- `app/src/shaders/candleLight.ts` = `notes/light/candleLight.v7.ts`, typecheck sạch.
-- Đã kiểm bằng ảnh chụp lúc chưa thắp: `notes/light/v7-bottom-rim-after.jpg`.
-- Sim Light cũ đã bị xoá; đã tạo lại sim cùng tên (UDID mới).
+- **Cause:** v6 dropped shadows entirely on the floor area hidden behind the pumpkin's base, so that bright wood showed through the slightly transparent bottom edge of the rind.
+- **Fixed:** that floor area is now uniformly dark (0.14), matching the contact shadow darkness at the base edge. The pumpkin's bottom fades into the contact shadow, no bright rim, no cut band.
+- `app/src/shaders/candleLight.ts` = `notes/light/candleLight.v7.ts`, typecheck clean.
+- Checked with a screenshot before lighting: `notes/light/v7-bottom-rim-after.jpg`.
+- The old Light sim had been deleted; recreated a sim with the same name (new UDID).
 
-## 23:32: đáy quả bí không còn dải tối (pumpkin-bottom-seam). ĐÃ CHÉP vào app thật
+## 23:32: no more dark band at the pumpkin's bottom (pumpkin-bottom-seam). COPIED into the real app
 
-- **Nguyên nhân:** bóng tiếp xúc và bóng đổ (v5) tô cả lên những điểm sàn nằm ngay sau chân bí. Mép đáy của vỏ bí trong ảnh Blender trong suốt một phần, nên dải tối lộ xuyên qua đáy bí như một đường cắt.
-- **Đã sửa:** thêm `seenPast(P)` trong `PUMPKIN_SHADOW_SKSL`.
-  - Điểm sàn nào bị chính quả bí che theo tia từ mắt (thử bằng ellipsoid, có dải chuyển mềm) thì không áp AO, bóng tiếp xúc, bóng đèn hiên, bóng trăng hay bóng sét.
-  - Ngưỡng 0,92–0,98 bán kính, vì đường viền đáy trong ảnh nằm hơi lọt vào trong ellipsoid; nhờ vậy bóng tiếp xúc vẫn áp sát chân bí.
-- `app/src/shaders/candleLight.ts` = `notes/light/candleLight.v6.ts`. Không cần vá file nào khác, typecheck sạch.
-- Đã kiểm trên sim Light, chỉ bằng ảnh chụp, lúc chưa thắp và lúc đã thắp.
-- Ảnh: `notes/light/v6-bottom-seam-before-after.jpg` (trái: ảnh feedback, phải: sau khi sửa).
+- **Cause:** the contact shadow and cast shadow (v5) also painted floor points right behind the pumpkin's base. The bottom edge of the rind in the Blender image is partly transparent, so the dark band showed through the bottom like a cut line.
+- **Fixed:** added `seenPast(P)` in `PUMPKIN_SHADOW_SKSL`.
+  - Any floor point occluded by the pumpkin itself along the eye ray (ellipsoid test, with a soft transition band) gets no AO, contact shadow, porch-light shadow, moon shadow or lightning shadow.
+  - Threshold 0.92–0.98 of the radius, because the bottom outline in the image sits slightly inside the ellipsoid; that way the contact shadow still hugs the base.
+- `app/src/shaders/candleLight.ts` = `notes/light/candleLight.v6.ts`. No other files need patching, typecheck clean.
+- Checked on the Light sim, screenshots only, before and after lighting.
+- Image: `notes/light/v6-bottom-seam-before-after.jpg` (left: feedback image, right: after the fix).
 
-## 23:10: bỏ bóng mặt xám lệch trên sàn (FEEDBACK-2300 mục 4). ĐÃ CHÉP vào app thật
+## 23:10: removed the offset grey face shadow on the floor (FEEDBACK-2300 item 4). COPIED into the real app
 
-- **Nguyên nhân:** vệt "mặt cười" của lớp sét xuyên lỗ (`lightningThrough.ts`).
-  - Màu xám xanh, chiếu theo hướng chớp nên lệch so với mặt cam của nến.
-  - Đường cong chớp có đuôi tắt dần ~1,2 s, nên nó còn hiện mờ sau cú sét.
-- **Đã bỏ hẳn:**
-  - overlay sét không còn vẽ gì lên sàn, chỉ còn ánh lạnh trong lòng bí lúc chớp (không đổi);
-  - bake `lightningMap` trả 0 ngay, không tốn gì; PumpkinScene giữ nguyên child, không cần sửa gì.
-- `app/src/shaders/lightningThrough.ts` = `notes/light/lightningThrough.v5.ts`. Typecheck app thật sạch.
-- Đã kiểm trên sim Light, chỉ bằng ảnh chụp (không quay video), lúc sét 22,35 s và ngoài lúc sét: ngoài vùng cam là gỗ thường.
-- Ảnh: `notes/light/v5-floor-ghost-before-after.jpg` (trái: ảnh feedback; giữa: lúc sét; phải: ngoài lúc sét).
+- **Cause:** the "smiley face" patch from the lightning-through-holes layer (`lightningThrough.ts`).
+  - Blue-grey, projected along the flash direction so it's offset from the candle's orange face.
+  - The flash curve has a ~1.2 s fade-out tail, so it lingered faintly after the strike.
+- **Removed entirely:**
+  - the lightning overlay no longer draws anything on the floor, only the cold light inside the pumpkin during the flash (unchanged);
+  - the `lightningMap` bake returns 0 immediately, costs nothing; PumpkinScene keeps the child as is, no changes needed.
+- `app/src/shaders/lightningThrough.ts` = `notes/light/lightningThrough.v5.ts`. Real app typecheck clean.
+- Checked on the Light sim, screenshots only (no video), at the 22.35 s strike and outside it: outside the orange area it's plain wood.
+- Image: `notes/light/v5-floor-ghost-before-after.jpg` (left: feedback image; middle: during the strike; right: outside the strike).
 
-## 19:31: v5, bóng quả bí lúc chưa thắp (review-1917). ĐÃ CHÉP vào app thật
+## 19:31: v5, pumpkin shadow before lighting (review-1917). COPIED into the real app
 
 `app/src/shaders/candleLight.ts` = `notes/light/candleLight.v5.ts`.
-- Chỉ đổi file của LIGHT. Giao diện bake, uniform và các đoạn SkSL giữ nguyên, nên không cần vá PumpkinScene hay background.
-- Typecheck app thật sạch.
-- Metro của agent chính sẽ tự nạp. Ai đang quay thì quay lại đoạn 0–19 s.
+- Only LIGHT's file changed. Bake interface, uniforms and SkSL snippets unchanged, so no need to patch PumpkinScene or background.
+- Real app typecheck clean.
+- The main agent's Metro will hot-reload it. Whoever is recording should re-record 0–19 s.
 
-Ảnh:
-- `notes/light/v5-shadow-before-after.jpg`: trái là khung 2,6 s trong review-1917, phải là v5 trên sim Light lúc chưa thắp.
-- `notes/light/v5-shadow-floor-only.jpg`: render offline chỉ có nền và bóng (đèn hiên sáng), trái là bản trước, phải là v5.
+Images:
+- `notes/light/v5-shadow-before-after.jpg`: left is the 2.6 s frame in review-1917, right is v5 on the Light sim before lighting.
+- `notes/light/v5-shadow-floor-only.jpg`: offline render with only background and shadow (porch light on), left is the previous version, right is v5.
 
-**Nguyên nhân "đĩa elip tối":** bóng do shader giải tích của LIGHT (từ v3), không phải từ pass Blender.
-- Phép thử che sáng dùng một ellipsoid trơn.
-- Nguồn đèn hiên 7 cm cho bán ảnh rất hẹp, nên mép rõ.
-- Độ đậm 0,6 cộng AO rộng 0,6.
+**Cause of the "dark elliptical disc":** the shadow comes from LIGHT's analytic shader (since v3), not from the Blender pass.
+- The occlusion test used a smooth ellipsoid.
+- The 7 cm porch-light source gives a very narrow penumbra, so the edge is sharp.
+- Strength 0.6 plus a wide AO of 0.6.
 
-**Đã đổi:**
-- **Bóng tiếp xúc:** rất tối (0,88) và rất hẹp, chỉ ngay chân bí. AO rộng nhẹ đi một nửa.
-- **Bóng đèn hiên ra hình quả bí:** phép thử che sáng theo đường viền 10 múi cộng cái cuống (đoạn thẳng nghiêng ~5,5 cm, dày 1,5 cm).
-- **Nguồn sáng thật** gồm lõi bóng đèn 5 cm (65 %) và kính mờ cộng ánh hắt tường 25 cm (35 %).
-  - Bán ảnh = cỡ nguồn × (vật che → sàn) / (đèn → vật che): sắc ở chân, mềm dần ra xa.
-  - Lõi nhỏ giữ được viền múi và mũi cuống ở chóp bóng.
-- **Nhạt hơn nhiều:** bóng đèn hiên chỉ che 52 %, bóng trăng 42 %, vì ánh trăng và ánh trời hắt vẫn lấp vào.
-- **Vệt ướt:** ván ướt có một vệt bóng loáng mảnh của đèn hiên (GGX, Fresnel ở góc xiên). Vệt này cũng bị quả bí che.
-- Không đụng tới: ánh mặt trên sàn lúc nến sáng, bóng sét, `stormLight`.
+**Changed:**
+- **Contact shadow:** very dark (0.88) and very narrow, right at the base only. The wide AO is halved.
+- **Porch-light shadow is pumpkin-shaped:** the occlusion test follows the 10-rib outline plus the stem (a slanted segment ~5.5 cm long, 1.5 cm thick).
+- **Real light source** = a 5 cm bulb core (65 %) plus frosted glass and wall bounce of 25 cm (35 %).
+  - Penumbra = source size × (occluder → floor) / (light → occluder): sharp at the base, softening further out.
+  - The small core preserves the rib outline and the stem tip at the shadow's apex.
+- **Much lighter:** the porch-light shadow only blocks 52 %, the moon shadow 42 %, since moonlight and skylight still fill in.
+- **Wet streak:** the wet boards have a thin glossy streak from the porch light (GGX, Fresnel at grazing angles). The pumpkin occludes this too.
+- Untouched: the face light on the floor when the candle is lit, the lightning shadow, `stormLight`.
 
-## 18:50: v4, sửa lúc sét (anh Hoa duyệt v3: giữ nguyên ánh mặt trên sàn)
+## 18:50: v4, fixes during lightning (Hoa approved v3: keep the face light on the floor as is)
 
-Chạy **một lệnh** ở gốc dự án:
+Run **one command** at the project root:
 
 ```bash
 python3 notes/light/apply_v4.py
 ```
 
-Lệnh này làm:
-- Chép `lightningThrough.v4.ts` và `candleLight.v4.ts` vào `app/src/shaders/`.
-- Vá PumpkinScene 2 dòng: overlay sét có thêm child `inLit` (ảnh lòng bí) và uniform `imgS`.
+It does:
+- Copies `lightningThrough.v4.ts` and `candleLight.v4.ts` into `app/src/shaders/`.
+- Patches 2 lines of PumpkinScene: the lightning overlay gets an extra child `inLit` (pumpkin interior image) and uniform `imgS`.
 
-Đã chạy thử trên bản sao file thật lúc 18:51: áp sạch, typecheck, eslint và SkSL đều sạch. Ánh mặt trên sàn **không đổi** so với v3.
+Test-run on a copy of the real files at 18:51: applies cleanly, typecheck, eslint and SkSL all clean. The face light on the floor is **unchanged** from v3.
 
-Ảnh: `notes/light/v4-strike-before-after.jpg` (trái: v3, phải: v4, cùng khoảnh khắc sét 17,4 s trên sim Light).
+Image: `notes/light/v4-strike-before-after.jpg` (left: v3, right: v4, same 17.4 s strike moment on the Light sim).
 
-1. **Lỗ khắc lúc sét không còn trắng đặc.**
-   - Ánh chớp ngoài trời chỉ rọi nhẹ thành trong. Độ sáng theo chính ảnh lòng bí (thịt và xơ bí), màu xanh lạnh.
-   - Thành phía phải trong lòng bí hứng nhiều hơn vì chớp đến từ bên trái. Mép thành vết cắt vẫn thấy.
-   - Mức trần 0,6. Trước khi thắp rõ hơn sau khi thắp.
-2. **Hết vệt trắng răng cưa dưới miệng.** Có hai nguyên nhân:
-   - Vòng 12 lần đọc mẫu để vẽ tia đã bỏ hẳn.
-   - Vệt sáng trên sàn lúc sét trước đây tra bằng P còn bậc của ảnh độ sâu 8-bit. Giờ tra trên mặt phẳng sàn, lấy 4 điểm, và dịu hơn.
-3. **Bóng bí trên tường và cửa rõ hơn.**
-   - Ánh chớp mạnh hơn (×1,45) và bóng tối hơn: che 97–98 %, nguồn 0,6°.
-   - Tường lúc chớp giảm bão hoà (trắng xanh, không còn tím loè), nên bóng đen nổi hơn.
+1. **Carved holes are no longer solid white during lightning.**
+   - The outdoor flash only lightly lights the inner wall. Brightness follows the interior image itself (flesh and fibres), cold blue.
+   - The right inner wall catches more because the flash comes from the left. The cut wall edge is still visible.
+   - Cap 0.6. Stronger before lighting than after.
+2. **No more jagged white streak below the mouth.** Two causes:
+   - The 12-sample loop that drew the rays is gone.
+   - The floor patch during lightning used to be looked up with a P that still had the steps of the 8-bit depth image. Now it's looked up on the floor plane, with 4 taps, and softer.
+3. **Pumpkin shadow on the wall and door is clearer.**
+   - Stronger flash (×1.45) and darker shadow: blocks 97–98 %, 0.6° source.
+   - The wall desaturates during the flash (blue-white, no more purple glare), so the black shadow pops more.
 
-## 18:30: v3 theo POLISH-1815 mục 1–2 (đã gộp)
+## 18:30: v3 per POLISH-1815 items 1–2 (merged)
 
-Chạy **một lệnh** ở gốc dự án:
+Run **one command** at the project root:
 
 ```bash
 python3 notes/light/apply_v3.py
 ```
 
-Lệnh này làm:
-- Chép `notes/light/candleLight.v3.ts` thành `app/src/shaders/candleLight.ts`. Giao diện bake giữ y như v2, PumpkinScene không đổi.
-- Thêm **một dòng** vào `background.ts` (file PERF), ngay sau dòng loé sét: `col += stormLight(P, dark);`.
+It does:
+- Copies `notes/light/candleLight.v3.ts` to `app/src/shaders/candleLight.ts`. Bake interface identical to v2, PumpkinScene unchanged.
+- Adds **one line** to `background.ts` (PERF's file), right after the lightning flash line: `col += stormLight(P, dark);`.
 
-Đã chạy thử trên bản sao file thật: kết quả trùng với bản đã xem trên sim, typecheck, eslint và SkSL đều sạch.
+Test-run on a copy of the real files: result matches what was seen on the sim, typecheck, eslint and SkSL all clean.
 
-Ảnh (trái là trước, phải là sau, chụp trên sim Light):
-- `notes/light/v3-wall-before-after.jpg`: nến sáng, khung nghỉ.
-- `notes/light/v3-floor-before-after.jpg`: mặt trên sàn.
-- `notes/light/v3-strike-before-after.jpg`: lúc sét.
+Images (left is before, right is after, captured on the Light sim):
+- `notes/light/v3-wall-before-after.jpg`: candle lit, rest frame.
+- `notes/light/v3-floor-before-after.jpg`: face on the floor.
+- `notes/light/v3-strike-before-after.jpg`: during lightning.
 
-**1. Bỏ mặt bí trên tường.**
-- Kênh G của bake đã bỏ (rẻ hơn v2).
-- Tường và cửa phía sau chỉ còn một quầng ấm rất nhẹ, không có hình: giả lập ánh xuyên vỏ và ánh hắt từ sàn, giảm theo 1/d², tối hơn quả bí nhiều.
-- **Bóng sét:** mỗi cú sét, ánh chớp lạnh vào thấp từ phía trước-trái.
-  - Lý do góc thấp: mái hiên chặn hết ánh sáng dốc từ trời, chỉ ánh thấp qua chỗ hở của hiên mới tới được tường.
-  - Tường và cửa (đứng, quay về phía chớp) sáng lên. Quả bí đổ **bóng đen sắc** (nguồn 0,7°) dài qua sàn lên chân tường và khung cửa ngay sau-phải nó.
-  - Bóng tắt theo đúng `storm` = flashCurve. Bóng cũng được gộp vào phần loé sét có sẵn của nền.
-  - Code: `stormLight()` và `pumpkinShade()` trong `PUMPKIN_SHADOW_SKSL`, hướng chớp ở `LS_DIR`.
-- **Không có bóng mèo.** Mèo ngồi trên lan can ở x = −0,66 m, bên trái chỗ tường bắt đầu (x = −0,30). Ánh chớp từ trái nên bóng mèo rơi vào khoảng hở của lan can: không có mặt nào hứng đúng vật lý.
-- Nếu muốn có bóng mèo trên tường, phải dời mèo sang phải cột góc (x > −0,2) trong `BlackCat.tsx` (file của CAT). Khi đó cần thêm uniform vị trí mèo, khoảng 15 phút.
+**1. Removed the pumpkin face on the wall.**
+- The bake's G channel is gone (cheaper than v2).
+- The wall and door behind now only have a very faint warm glow, no shape: fakes light through the rind and bounce from the floor, falling off as 1/d², much darker than the pumpkin.
+- **Lightning shadow:** on each strike, the cold flash comes in low from the front-left.
+  - Why low: the porch roof blocks all steep light from the sky, only low light through the porch opening reaches the wall.
+  - The wall and door (vertical, facing the flash) light up. The pumpkin casts a **sharp black shadow** (0.7° source) long across the floor up onto the base of the wall and the door frame right behind-right of it.
+  - The shadow fades exactly with `storm` = flashCurve. It is also folded into the background's existing lightning flash.
+  - Code: `stormLight()` and `pumpkinShade()` in `PUMPKIN_SHADOW_SKSL`, flash direction in `LS_DIR`.
+- **No cat shadow.** The cat sits on the railing at x = −0.66 m, left of where the wall starts (x = −0.30). The flash comes from the left, so the cat's shadow falls into the railing gap: physically there's no surface to catch it.
+- For a cat shadow on the wall, the cat would have to move right of the corner post (x > −0.2) in `BlackCat.tsx` (CAT's file). That also needs a cat-position uniform, about 15 minutes.
 
-**2. Mặt trên sàn.**
-- Nguồn đĩa nhỏ lại (bán kính 0,4 cm) và bớt quầng mềm: mắt ra tam giác, mũi tam giác, miệng có răng, sắc ở gần.
-- Tone-map vô hướng (`4,2·L/(2,6+L)`) nên vân gỗ và khe ván giữ nguyên độ tương phản.
-- Màu hổ phách, phần nóng nhất ngả cam đậm thay vì vàng chanh, không sáng hơn lỗ khắc.
+**2. Face on the floor.**
+- Smaller disc source (radius 0.4 cm) and less soft halo: triangle eyes, triangle nose, toothy mouth, sharp up close.
+- Scalar tone-map (`4.2·L/(2.6+L)`) so wood grain and board gaps keep their contrast.
+- Amber colour, the hottest part leans deep orange instead of lemon yellow, no brighter than the carved holes.
 
-**Cho ATMOS:** vị trí mặt trên sàn không đổi so với v2.
-**Mốc sét đề xuất 17,4 s** vẫn đáng thêm: lúc 17,4 s đèn hiên sáng, bóng sét in lên cửa rõ nhất (xem ảnh sét). Lúc 22,35 s camera đang nghiêng, bóng nằm sát mép phải.
+**For ATMOS:** the floor face position is unchanged from v2.
+**Proposed strike at 17.4 s** is still worth adding: at 17.4 s the porch light is on and the lightning shadow lands on the door most clearly (see the strike image). At 22.35 s the camera is tilting and the shadow sits at the right edge.
 
-`faceShadow.ts`: không còn ai import (mặt trên tường đã bỏ). Có thể xoá sau khi quay xong.
+`faceShadow.ts`: nothing imports it any more (the face on the wall is gone). Can be deleted after recording.
 
-## 18:45 (cũ): v2, bóng mặt trên tường dùng chung cách lấy mẫu nguồn sáng với sàn (đã bị v3 thay)
+## 18:45 (old): v2, face shadow on the wall shares the light-source sampling with the floor (superseded by v3)
 
-Agent chính đã gộp `patch_background.py` và `patch_scene.py` (18:10). Bản v2 cần **một lệnh** ở gốc dự án:
+The main agent merged `patch_background.py` and `patch_scene.py` (18:10). v2 needs **one command** at the project root:
 
 ```bash
 python3 notes/light/apply_v2.py
 ```
 
-Lệnh này làm:
-- Chép `notes/light/candleLight.v2.ts` thành `app/src/shaders/candleLight.ts`.
-- Thêm child mask nét vào lần bake candleLight trong PumpkinScene, kèm dependency.
-- **Gỡ pass overlay faceShadow**: bớt 1 lớp phủ toàn màn hình.
+It does:
+- Copies `notes/light/candleLight.v2.ts` to `app/src/shaders/candleLight.ts`.
+- Adds the sharp mask child to the candleLight bake in PumpkinScene, with its dependency.
+- **Removes the faceShadow overlay pass**: one fewer full-screen layer.
 
-Đã chạy thử trên bản sao của file thật lúc 18:45: áp sạch, typecheck sạch.
+Test-run on a copy of the real files at 18:45: applies cleanly, typecheck clean.
 
-**Không chép riêng file v2 mà không chạy script.** Bake mới cần child thứ 3, thiếu là hỏng.
+**Don't copy the v2 file alone without running the script.** The new bake needs a 3rd child; without it, it breaks.
 
-Thay đổi của v2:
-- Mặt trên tường giờ nằm trong chính lần bake ánh nến, ở kênh G của lightMap.
-  - Lấy mẫu nguồn đĩa giống sàn (32 điểm, bán kính 6 mm), nên có bán ảnh thật tăng theo khoảng cách.
-  - Tính một lần mỗi khi mask đổi. Mỗi frame chỉ tra 1 lần trong `candleShade` của background.
-  - Lửa lay ×4 trên tường, mép mềm theo khoảng cách.
-- Mép lỗ lấy từ mask nét, nên răng miệng hiện rõ cả trên sàn lẫn trên tường.
-- Ánh sàn hạ còn khoảng 40 % so với bản 18:10 (với mask nét, bản 18:10 bị cháy vàng).
+v2 changes:
+- The face on the wall now lives in the candle-light bake itself, in the lightMap's G channel.
+  - Samples the disc source like the floor (32 points, 6 mm radius), so it has a real penumbra that grows with distance.
+  - Computed once per mask change. Each frame does just 1 lookup in background's `candleShade`.
+  - Flame sway ×4 on the wall, edge softening with distance.
+- Hole edges come from the sharp mask, so the mouth's teeth show clearly on both floor and wall.
+- Floor light lowered to about 40 % of the 18:10 version (with the sharp mask, 18:10 blew out yellow).
 
-Ảnh: `notes/light/v2-before-after.jpg` (trái: trước mọi thay đổi của LIGHT; phải: v2 trên sim Light lúc nến sáng), `notes/light/v2-lit-rest.jpg`.
+Images: `notes/light/v2-before-after.jpg` (left: before any LIGHT change; right: v2 on the Light sim with the candle lit), `notes/light/v2-lit-rest.jpg`.
 
-`faceShadow.ts` vẫn giữ (đoạn `FACE_SHADOW_SKSL`, `faceFlame`) nhưng sau v2 không còn ai import.
+`faceShadow.ts` is still kept (the `FACE_SHADOW_SKSL` snippet, `faceFlame`) but after v2 nothing imports it.
 
-## 18:10: ánh mặt cười trên sàn + bóng bí (FEEDBACK-1720 mục 1)
+## 18:10: smiley-face light on the floor + pumpkin shadow (FEEDBACK-1720 item 1)
 
-Ảnh: `notes/light/floor-before-after.jpg` (trái là trước, phải là sau, chụp trên sim Light lúc nến sáng), `notes/light/shadow-before-after-jump.jpg`
-(chưa thắp, đèn hiên sáng: bóng Blender cũ | bóng mới | bí đang nhảy 25 cm), `notes/light/lit-rest.jpg` (cả khung).
+Images: `notes/light/floor-before-after.jpg` (left is before, right is after, captured on the Light sim with the candle lit), `notes/light/shadow-before-after-jump.jpg`
+(not lit, porch light on: old Blender shadow | new shadow | pumpkin mid-jump at 25 cm), `notes/light/lit-rest.jpg` (full frame).
 
-**Nguyên nhân 3–4 dải ngang:**
-1. Ảnh độ sâu 8-bit dạng log có bước khoảng 2 cm ở tầm sàn. Điểm sàn P vì thế nhảy bậc, và vệt sáng bị cắt thành từng dải.
-2. Nguồn sáng là 3 vòng cố định cộng 2 điểm, nên ra 4–5 bản sao hình miệng lệch nhau.
+**Cause of the 3–4 horizontal bands:**
+1. The 8-bit log depth image has ~2 cm steps at floor range. So the floor point P jumps in steps, and the light patch gets sliced into bands.
+2. The light source was 3 fixed rings plus 2 points, giving 4–5 offset copies of the mouth shape.
 
-Ngoài ra ngọn lửa nằm ngang mép dưới miệng (z ≈ 6 cm), nên tia đi thẳng từ lửa chỉ lọt qua một khe ở đáy miệng. Mắt và mũi không thể in xuống sàn từ đó.
+Also, the flame sits level with the mouth's lower edge (z ≈ 6 cm), so rays straight from the flame only pass through a slit at the bottom of the mouth. The eyes and nose can't project onto the floor from there.
 
-**Đã đổi trong `candleLight.ts` (đã chép vào app thật, an toàn khi chưa vá gì thêm):** shader bake giữ nguyên tên uniform và thứ tự child, nên PumpkinScene không phải đổi gì.
-- Điểm trên sàn là giao tia với mặt phẳng z = 0. Hết dải.
-- Còn **một nguồn duy nhất**: một đĩa bán kính 2 cm ngay trên nắp, 48 mẫu xoắn hướng dương (Fibonacci), xoay theo từng pixel.
-  - Cho ra một khuôn mặt đúng phối cảnh: miệng gần bí (y ≈ −0,2 m), mũi ở y ≈ −0,3, hai mắt ở y ≈ −0,4…−0,5 và x ≈ ±0,25.
-  - Mép sắc ở gần, bán ảnh rộng dần theo khoảng cách (mắt mềm hơn miệng).
-- Ánh dội từ thành trong là bản mask blur rộng dọc tia trung tâm: chỉ thành một quầng mềm, không sinh bản sao.
-- Pixel ở xa mọi tia sáng thoát sau 1 lần đọc mask.
-- Mép lỗ cắt sắc lại bằng ngưỡng trên mask blur, vì bake chỉ nhận `maskBlur`.
+**Changed in `candleLight.ts` (already copied into the real app, safe before any other patch):** the bake shader keeps the uniform names and child order, so PumpkinScene doesn't need any change.
+- The floor point is the ray's intersection with the z = 0 plane. No more bands.
+- Now **a single source**: a disc of radius 2 cm just above the lid, 48 sunflower-spiral samples (Fibonacci), rotated per pixel.
+  - Gives a face in correct perspective: mouth near the pumpkin (y ≈ −0.2 m), nose at y ≈ −0.3, two eyes at y ≈ −0.4…−0.5 and x ≈ ±0.25.
+  - Sharp edges up close, penumbra widening with distance (eyes softer than the mouth).
+- Bounce from the inner wall is a wide mask blur along the central ray: just a soft glow, no copies.
+- Pixels far from every light ray exit after 1 mask read.
+- Hole edges re-sharpened with a threshold on the mask blur, because the bake only receives `maskBlur`.
 
-**Cần PERF / agent chính vá `background.ts`** (thêm 2 đoạn SkSL từ `candleLight.ts`):
+**PERF / the main agent need to patch `background.ts`** (add 2 SkSL snippets from `candleLight.ts`):
 
 ```bash
-python3 notes/light/patch_background.py app/src/shaders/background.ts    # chạy bằng chuỗi neo, chạy lại an toàn
+python3 notes/light/patch_background.py app/src/shaders/background.ts    # anchor-string based, safe to rerun
 ```
 
-Bản vá làm:
-- `floorSnap(P)`: P trên sàn bám mặt phẳng.
-- `candleL(lb)`: tra lightMap kèm chập chờn (dịch ±1 pt và co giãn ±1,5 % quanh chân bí, cùng nhịp với `faceFlame`).
-- `candleShade(...)`: ánh nến nhân với ảnh glow Blender, nên ăn vân gỗ và khe ván tối hơn.
-  - Có vệt bóng loáng của sàn ướt (GGX + Fresnel ở góc xiên), ấm, sáng hơn khi nhìn nghiêng.
-  - Có AO của quả bí: ảnh glow được render khi ẩn bí, nên trước đây sàn ngay chân bí sáng cam và bí trông như lơ lửng.
-  - Có một vòng ấm mảnh xuyên vỏ ngay ngoài chân bí.
-- `pumpkinShade(P)` (đoạn `PUMPKIN_SHADOW_SKSL`) thay hẳn `shadow_lit/dark.png` (child vẫn khai báo nhưng không đọc nữa):
-  - Bóng tiếp xúc rất tối và hẹp ở chân bí, cộng AO.
-  - Bóng mềm của đèn hiên (đèn cầu 9 cm) và của trăng sau mây (nón ~4,5°). Bán ảnh rộng dần theo khoảng cách. Vùng tối nhất ~0,4, không đen kịt.
-  - Áp sau khi đã trộn panorama và ảnh gốc, nên quay góc nhìn không bị cắt ở mép khung.
-  - Khi bí nhảy, bóng theo `jW` (nhạt và loang theo độ cao). Bóng tiếp xúc tắt khi bí nhấc lên.
+The patch does:
+- `floorSnap(P)`: P on the floor snaps to the plane.
+- `candleL(lb)`: lightMap lookup with flicker (shift ±1 pt and scale ±1.5 % around the pumpkin's base, same rhythm as `faceFlame`).
+- `candleShade(...)`: candle light multiplied by the Blender glow image, so it picks up wood grain and darker board gaps.
+  - Has the wet floor's glossy streak (GGX + Fresnel at grazing angles), warm, brighter at oblique views.
+  - Has the pumpkin's AO: the glow image was rendered with the pumpkin hidden, so the floor right at the base used to glow orange and the pumpkin looked like it was floating.
+  - Has a thin warm ring through the rind just outside the base.
+- `pumpkinShade(P)` (the `PUMPKIN_SHADOW_SKSL` snippet) fully replaces `shadow_lit/dark.png` (the child is still declared but no longer read):
+  - Very dark, narrow contact shadow at the base, plus AO.
+  - Soft shadows from the porch light (9 cm sphere light) and from the moon behind clouds (~4.5° cone). Penumbra widens with distance. Darkest area ~0.4, not pitch black.
+  - Applied after the panorama and plate are blended, so looking around doesn't clip at the frame edge.
+  - When the pumpkin jumps, the shadow follows `jW` (fainter and spreading with height). The contact shadow fades out when the pumpkin lifts off.
 
-**Cần agent chính vá `PumpkinScene.tsx`:**
+**The main agent needs to patch `PumpkinScene.tsx`:**
 
 ```bash
 python3 notes/light/patch_scene.py app/src/scene/PumpkinScene.tsx
 ```
 
-Bản vá làm:
-- `LIGHT_K = 2` (vệt sáng mỏng vì camera thấp; bake chỉ chạy lại khi mask đổi).
-- Thêm `...candleFloorUniforms(time.value, PUMPKIN_FOOT)` vào `bgU`.
-- Gắn luôn bóng mặt trên tường và sét xuyên lỗ (2 mục dưới).
+The patch does:
+- `LIGHT_K = 2` (the light patch is thin because the camera is low; the bake only reruns when the mask changes).
+- Adds `...candleFloorUniforms(time.value, PUMPKIN_FOOT)` to `bgU`.
+- Also wires up the face shadow on the wall and lightning through the holes (2 sections below).
 
-Áp cả 2 bản vá cùng lúc: `candleFloorUniforms` thêm uniform mà background cũ không khai báo.
+Apply both patches together: `candleFloorUniforms` adds uniforms the old background doesn't declare.
 
-**Cho ATMOS:** hình mặt trên sàn giờ nằm ở y ≈ −0,2…−0,5 m, x ±0,25 (trước là một dải quanh y ≈ −0,3).
-- Vũng sáng hắt lên sương quanh (0; −0,42) trong `atmos.ts` vẫn khớp, nhưng có thể kéo dài theo y.
-- Phản chiếu bí trên sàn ướt trong `rain.ts`: không đổi.
+**For ATMOS:** the floor face is now at y ≈ −0.2…−0.5 m, x ±0.25 (it used to be a band around y ≈ −0.3).
+- The light pool bouncing up into the fog around (0; −0.42) in `atmos.ts` still matches, but could be stretched along y.
+- The pumpkin reflection on the wet floor in `rain.ts`: unchanged.
 
-## Bóng mặt bí khổng lồ trên tường (A): `faceShadow.ts`
+## Giant pumpkin face shadow on the wall (A): `faceShadow.ts`
 
-Đã chạy trên sim Light (xem `lit-rest.jpg`): sau khi thắp, một khuôn mặt cười to ~0,7 m in lên tường gỗ, cột và cửa ngay trên quả bí.
-- Đổi đúng khi xoay góc nhìn và nghiêng máy (tính theo điểm thế giới lấy từ độ sâu).
-- Lay động theo lửa: tâm chiếu dao động theo `lean` và nhiễu, nhân ×4 lên tường.
-- Mép mềm dần theo khoảng cách (mask nét đổi dần sang mask blur).
-- Lỗ cắt dày làm hẹp chùm tia xiên.
-- Albedo lấy từ ảnh đèn hiên đã nén lại, nhân 1/d².
+Running on the Light sim (see `lit-rest.jpg`): after lighting, a big ~0.7 m smiley face lands on the wooden wall, post and door right above the pumpkin.
+- Changes correctly when rotating the view and tilting the phone (computed from world points taken from depth).
+- Sways with the flame: the projection centre moves with `lean` and noise, scaled ×4 onto the wall.
+- Edge softens with distance (sharp mask blends into blurred mask).
+- Thick cut holes narrow oblique ray bundles.
+- Albedo from the compressed porch-light image, times 1/d².
 
-**Lưu ý trung thực về vật lý:** mặt khắc quay về phía camera, nên ánh nến thật đi qua lỗ không thể tới tường phía sau.
-- Bản này chiếu qua ảnh đối xứng của mask sang nửa sau quả bí (như thể lỗ khắc xuyên qua quả bí).
-- Tâm chiếu đẩy ra trước 22 cm để mặt phóng ~5× (dùng lửa thật thì phóng ~10×: miệng tràn hết bề ngang, mắt ra ngoài khung).
-- Hằng số: `FS_PUSH`, `FS_DROP` trong `faceShadow.ts`.
+**Honest note on the physics:** the carved face points toward the camera, so real candle light through the holes can't reach the wall behind.
+- This version projects through a mirrored copy of the mask on the back half of the pumpkin (as if the carved holes went right through it).
+- The projection centre is pushed 22 cm forward so the face is magnified ~5× (with the real flame it would be ~10×: the mouth spans the full width, the eyes go off frame).
+- Constants: `FS_PUSH`, `FS_DROP` in `faceShadow.ts`.
 
-Đã có lớp `<Fill blendMode="plus">` riêng, vẽ ngay sau nền và trước quả bí, trong `patch_scene.py`.
-- Chi phí khi chưa thắp: thoát ngay theo uniform.
-- Khi đã thắp: 2 lần đọc độ sâu, 2 phép giao ellipsoid, tối đa 4 lần đọc mask, chỉ ở các pixel phía sau quả bí.
-- Đề xuất cho PERF nếu cần bớt một pass: gộp `FACE_SHADOW_SKSL` (`faceWall(P)`) vào `background.ts`. Ở đó đã có P và ảnh glow, nên chỉ tốn thêm phần giao ellipsoid và đọc mask.
+There's a dedicated `<Fill blendMode="plus">` layer, drawn right after the background and before the pumpkin, in `patch_scene.py`.
+- Cost before lighting: exits immediately on a uniform.
+- When lit: 2 depth reads, 2 ellipsoid intersections, up to 4 mask reads, only on pixels behind the pumpkin.
+- Proposal for PERF if a pass needs to go: fold `FACE_SHADOW_SKSL` (`faceWall(P)`) into `background.ts`. P and the glow image are already there, so it only adds the ellipsoid intersection and mask reads.
 
-## Sét chiếu xuyên lỗ khắc (B): `lightningThrough.ts`
+## Lightning through the carved holes (B): `lightningThrough.ts`
 
-Mỗi lần sét đánh (đi theo `storm` = flashCurve), ánh trắng xanh từ phía sau quả bí lọt ra:
-- Lỗ khắc loé trắng, lõi sáng nhất ở giữa lỗ, viền lạnh tràn ra vỏ.
-- Có tia sáng ngắn trong mưa, chạy từ các lỗ xuống phía vệt sáng trên sàn.
-- Vệt sáng hình mặt in lên sàn trước bí: bake một lần mỗi khi mask đổi (`lightningMap`), giao đúng mặt phẳng sàn, vỏ dày cắt tia xiên.
-- Chỉ bật khi đã khắc. Trước khi thắp sáng gấp đôi.
-- Overlay `plus` vẽ sau quả bí: thoát ngay khi không có chớp. Khi chớp chỉ tính quanh quả bí (12 lần đọc mask cho tia).
+On every strike (following `storm` = flashCurve), blue-white light from behind the pumpkin leaks out:
+- The carved holes flash white, brightest core in the middle of each hole, a cold fringe spilling onto the rind.
+- Short light rays in the rain, running from the holes down toward the patch on the floor.
+- A face-shaped patch on the floor in front of the pumpkin: baked once per mask change (`lightningMap`), properly intersected with the floor plane, the thick rind clips oblique rays.
+- Only active once carved. Twice as bright before lighting.
+- `plus` overlay drawn after the pumpkin: exits immediately when there's no flash. During a flash it only computes around the pumpkin (12 mask reads for the rays).
 
-**Đề xuất cho ATMOS (`storm.ts`):** hai cú sét hiện có rơi lúc camera nhìn sang trái (9,95 s, không thấy bí) và lúc đã thắp (22,35 s, không rõ bằng).
-- Thêm một cú lúc bí đã khắc xong, chưa thắp, camera ở khung nghỉ: `{ t: 17.4, az: -0.3, el: 0.5, dist: 900 }` (sau cú rơi lại 16,6, trước que diêm 18,6).
-- `synth_audio.py` tự đặt tiếng sấm theo mốc này.
-- Đã thử trong sandbox: quả bí "trợn mắt" rất rõ.
+**Proposal for ATMOS (`storm.ts`):** the two existing strikes land while the camera looks left (9.95 s, pumpkin not visible) and after lighting (22.35 s, less visible).
+- Add one strike when the pumpkin is carved, not yet lit, camera at the rest frame: `{ t: 17.4, az: -0.3, el: 0.5, dist: 900 }` (after the fall at 16.6, before the match at 18.6).
+- `synth_audio.py` places the thunder from this mark automatically.
+- Tried in the sandbox: the pumpkin "glares" very clearly.
 
-## Hiệu năng
+## Performance
 
-- Sim lúc đo bị bỏ đói (load avg host 26–50 vì nhiều agent cùng chạy): ra 0–30 khung/s cả khi tắt lớp mới. Số FPS trên sim lúc đó không dùng được.
-- Đo chi phí tương đối của shader bằng canvaskit (CPU raster, uniform thật, 440×956, nến sáng, khung nghỉ). Lúc đo faceShadow vẫn còn 3 vòng reproject; sau đó đã giảm còn 1 vòng.
+- The sim was starved during measurement (host load avg 26–50 with many agents running): 0–30 frames/s even with the new layers off. Sim FPS numbers from that time are unusable.
+- Measured relative shader cost with canvaskit (CPU raster, real uniforms, 440×956, candle lit, rest frame). At that time faceShadow still had 3 reproject loops; later cut down to 1.
 
-| Pass | Thời gian |
+| Pass | Time |
 |---|---|
-| background | 4,6 s |
-| faceShadow, đã thắp | 3,2 s |
-| faceShadow, chưa thắp | 1,2 s (chỉ là chi phí lấp pass trên CPU) |
-| lightning, đang chớp | 4,75 s, chỉ ~1 s mỗi cú sét |
+| background | 4.6 s |
+| faceShadow, lit | 3.2 s |
+| faceShadow, not lit | 1.2 s (just the CPU cost of filling the pass) |
+| lightning, during a flash | 4.75 s, only ~1 s per strike |
 
-- Bake candleLight mới chạy 48 mẫu trên vùng có tia: CPU 16 s so với 6 s của bản cũ. Trên GPU vẫn chỉ cỡ vài chục ms và chỉ chạy khi mask đổi.
-- **PERF nên đo lại trên Release.** Nếu gắt: gộp faceShadow vào background (xem trên), hoặc trả `LIGHT_K` về 1.
+- The new candleLight bake runs 48 samples over the ray-covered area: CPU 16 s vs 6 s for the old one. On the GPU it's still only tens of ms and only runs when the mask changes.
+- **PERF should re-measure on Release.** If tight: fold faceShadow into background (see above), or set `LIGHT_K` back to 1.
