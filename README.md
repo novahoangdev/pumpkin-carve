@@ -12,6 +12,15 @@ The app opens with a lightning strike, a crane shot down from the moon, a flicke
 React Native app composites them in real time with Skia v3 shaders, the carved holes are a mask drawn by your finger, and Reanimated drives the
 120Hz clock, gyro and haptics. Detailed design: [PLAN.md](PLAN.md).
 
+<p align="center">
+  <a href="render/promo/pumpkin-carve-final-v2.mp4"><img src="docs/demo.gif" width="640" alt="Pumpkin Carve demo: the match lights the candle, the carved face glows on the porch, then the bats fly out"></a>
+  <br>
+  <a href="render/promo/pumpkin-carve-final-v2.mp4"><b>▶ Watch the full demo with sound (MP4, 4:3, 34 s)</b></a>
+</p>
+
+Built with **Expo · React Native · [react-native-skia](https://shopify.github.io/react-native-skia/) · Reanimated 4 ·
+Blender**.
+
 ## Layout
 
 ```
@@ -93,6 +102,7 @@ The repo keeps only the published cut and contact sheets; everything else in `re
 
 - `render/promo/pumpkin-carve-final-v2.mp4`: the final cut (60 fps, 4:3, phone held still, Dynamic Island mini pumpkin + BOO!, end card "Happy Halloween!").
 - `render/promo/pumpkin-carve-final.mp4`: the previous cut, kept as a backup.
+- `docs/demo.gif`: the 6.5 s preview at the top of this README (candle lighting and the bats, from the final cut).
 - `render/promo/pumpkin-carve-sheet-final*.jpg`: frame grids for a quick look.
 - `render/audio/mix_final.wav`: mastered audio (−14 LUFS).
 
